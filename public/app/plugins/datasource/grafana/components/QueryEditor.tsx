@@ -51,7 +51,23 @@ export class QueryEditor extends PureComponent<Props> {
 
   renderMeasurementsQuery() {
     let { channel, measurements } = this.props.query;
-    const channels: Array<SelectableValue<string>> = [];
+    const channels: Array<SelectableValue<string>> = [
+      {
+        value: 'telegraf/aaa',
+        label: 'telegraf/aaa',
+        description: 'Description of aaa',
+      },
+      {
+        value: 'telegraf/bbb',
+        label: 'telegraf/bbb',
+        description: 'Description of bbb',
+      },
+      {
+        value: 'telegraf/ccc',
+        label: 'telegraf/ccc',
+        description: 'Description of ccc',
+      },
+    ];
     let currentChannel = channels.find((c) => c.value === channel);
     if (channel && !currentChannel) {
       currentChannel = {
