@@ -46,7 +46,7 @@ func (pm *PluginManager) GetPluginDashboards(orgId int64, pluginId string) ([]*P
 			continue
 		}
 
-		dashboard, err := pm.loadPluginDashboard(plugin.Id, include.Path)
+		dashboard, err := LoadPluginDashboard(plugin.Id, include.Path)
 		if err != nil {
 			return nil, err
 		}

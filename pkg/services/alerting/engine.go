@@ -30,6 +30,7 @@ type AlertEngine struct {
 	TSDBService      *tsdb.Service                 `inject:""`
 	Bus              bus.Bus                       `inject:""`
 	RequestValidator models.PluginRequestValidator `inject:""`
+	DataService      *tsdb.Service                 `inject:""`
 
 	execQueue     chan *job.Job
 	ticker        *Ticker
@@ -54,7 +55,7 @@ func (e *AlertEngine) Init() error {
 	e.ticker = NewTicker(time.Now(), time.Second*0, clock.New(), 1)
 	e.execQueue = make(chan *job.Job, 1000)
 	e.scheduler = newScheduler()
-	e.evalHandler = NewEvalHandler()
+	e.evalHandler = NewEvalHandler(e.DataService)
 	e.ruleReader = newRuleReader(e.TSDBService)
 	e.log = log.New("alerting.engine")
 	e.resultHandler = newResultHandler(e.RenderService)

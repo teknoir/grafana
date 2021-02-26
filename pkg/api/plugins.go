@@ -14,7 +14,7 @@ import (
 	"github.com/grafana/grafana/pkg/bus"
 	"github.com/grafana/grafana/pkg/models"
 	"github.com/grafana/grafana/pkg/plugins"
-	"github.com/grafana/grafana/pkg/plugins/backendplugin"
+	backendmodels "github.com/grafana/grafana/pkg/plugins/backendplugin/models"
 	"github.com/grafana/grafana/pkg/plugins/manager"
 	pluginmodels "github.com/grafana/grafana/pkg/plugins/models"
 	"github.com/grafana/grafana/pkg/plugins/models/adapters"
@@ -97,7 +97,7 @@ func (hs *HTTPServer) GetPluginList(c *models.ReqContext) response.Response {
 			continue
 		}
 
-		if pluginDef.State == plugins.PluginStateAlpha && !hs.Cfg.PluginsEnableAlpha {
+		if pluginDef.State == pluginmodels.PluginStateAlpha && !hs.Cfg.PluginsEnableAlpha {
 			continue
 		}
 
@@ -168,6 +168,11 @@ func (hs *HTTPServer) GetPluginSettingByID(c *models.ReqContext) response.Respon
 		Signature:     def.Signature,
 		SignatureType: def.SignatureType,
 		SignatureOrg:  def.SignatureOrg,
+	}
+
+	if app, ok := plugins.Apps[def.Id]; ok {
+		dto.Enabled = app.AutoEnabled
+		dto.Pinned = app.AutoEnabled
 	}
 
 	query := models.GetPluginSettingByIdQuery{PluginId: pluginID, OrgId: c.OrgId}
@@ -249,21 +254,13 @@ func (hs *HTTPServer) ImportDashboard(c *models.ReqContext, apiCmd dtos.ImportDa
 		return response.Error(422, "Dashboard must be set", nil)
 	}
 
-	cmd := manager.ImportDashboardCommand{
-		OrgId:     c.OrgId,
-		User:      c.SignedInUser,
-		PluginId:  apiCmd.PluginId,
-		Path:      apiCmd.Path,
-		Inputs:    apiCmd.Inputs,
-		Overwrite: apiCmd.Overwrite,
-		FolderId:  apiCmd.FolderId,
-		Dashboard: apiCmd.Dashboard,
-	}
-	if err := hs.PluginManager.ImportDashboard(cmd, hs.TSDBService); err != nil {
-		return hs.dashboardSaveErrorToApiResponse(err)
+	dashInfo, err := hs.PluginManager.ImportDashboard(apiCmd.PluginId, apiCmd.Path, c.OrgId, apiCmd.FolderId,
+		apiCmd.Dashboard, apiCmd.Overwrite, apiCmd.Inputs, c.SignedInUser, hs.DataService)
+	if err != nil {
+		return dashboardSaveErrorToApiResponse(err)
 	}
 
-	return response.JSON(200, cmd.Result)
+	return response.JSON(200, dashInfo)
 }
 
 // CollectPluginMetrics collect metrics from a plugin.
@@ -372,19 +369,19 @@ func (hs *HTTPServer) GetPluginErrorsList(c *models.ReqContext) response.Respons
 }
 
 func translatePluginRequestErrorToAPIError(err error) response.Response {
-	if errors.Is(err, backendplugin.ErrPluginNotRegistered) {
+	if errors.Is(err, backendmodels.ErrPluginNotRegistered) {
 		return response.Error(404, "Plugin not found", err)
 	}
 
-	if errors.Is(err, backendplugin.ErrMethodNotImplemented) {
+	if errors.Is(err, backendmodels.ErrMethodNotImplemented) {
 		return response.Error(404, "Not found", err)
 	}
 
-	if errors.Is(err, backendplugin.ErrHealthCheckFailed) {
+	if errors.Is(err, backendmodels.ErrHealthCheckFailed) {
 		return response.Error(500, "Plugin health check failed", err)
 	}
 
-	if errors.Is(err, backendplugin.ErrPluginUnavailable) {
+	if errors.Is(err, backendmodels.ErrPluginUnavailable) {
 		return response.Error(503, "Plugin unavailable", err)
 	}
 

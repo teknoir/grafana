@@ -22,30 +22,31 @@ import (
 	"github.com/grafana/grafana/pkg/tsdb/prometheus"
 )
 
+// NewService returns a new Service.
+func NewService() Service {
+	return Service{
+		registry: map[string]func(*models.DataSource) (pluginmodels.DataPlugin, error){},
+	}
+}
+
 func init() {
+	svc := NewService()
 	registry.Register(&registry.Descriptor{
-		Name:     "TSDBService",
-		Instance: &Service{},
+		Name:     "DataService",
+		Instance: &svc,
 	})
 }
 
-type HandleRequestFunc func(ctx context.Context, ds *models.DataSource, req pluginmodels.TSDBQuery) (pluginmodels.TSDBResponse, error)
-
-type TSDBQueryEndpoint interface {
-	Query(ctx context.Context, ds *models.DataSource, query pluginmodels.TSDBQuery) (pluginmodels.TSDBResponse, error)
-}
-
-type GetTSDBQueryEndpointFn func(ds *models.DataSource) (TSDBQueryEndpoint, error)
-
-// Service handles requests to TSDB data sources.
+// Service handles data requests to data sources.
 type Service struct {
 	Cfg                    *setting.Cfg                  `inject:""`
-	PluginManager          *manager.PluginManager        `inject:""`
 	CloudWatchService      *cloudwatch.CloudWatchService `inject:""`
+	PostgresService        *postgres.PostgresService     `inject:""`
 	CloudMonitoringService *cloudmonitoring.Service      `inject:""`
 	AzureMonitorService    *azuremonitor.Service         `inject:""`
+	PluginManager          *plugins.PluginManager        `inject:""`
 
-	registry map[string]func(*models.DataSource) (pluginmodels.TSDBPlugin, error)
+	registry map[string]func(*models.DataSource) (pluginmodels.DataPlugin, error)
 }
 
 // Init initialises the service.
@@ -55,7 +56,7 @@ func (s *Service) Init() error {
 	s.registry["prometheus"] = prometheus.NewExecutor
 	s.registry["influxdb"] = influxdb.NewExecutor
 	s.registry["mssql"] = mssql.NewExecutor
-	s.registry["postgres"] = postgres.NewExecutor
+	s.registry["postgres"] = s.PostgresService.NewExecutor
 	s.registry["mysql"] = mysql.NewExecutor
 	s.registry["elasticsearch"] = elasticsearch.NewExecutor
 	s.registry["cloudwatch"] = s.CloudWatchService.NewExecutor
@@ -64,23 +65,29 @@ func (s *Service) Init() error {
 	return nil
 }
 
-func (s *Service) HandleRequest(ctx context.Context, ds *models.DataSource, query pluginmodels.TSDBQuery) (
-	pluginmodels.TSDBResponse, error) {
-	plugin := s.PluginManager.GetTSDBPlugin(ds.Type)
+func (s *Service) HandleRequest(ctx context.Context, ds *models.DataSource, query pluginmodels.DataQuery) (
+	pluginmodels.DataResponse, error) {
+	plugin := s.PluginManager.GetDataPlugin(ds.Type)
 	if plugin == nil {
 		factory, exists := s.registry[ds.Type]
 		if !exists {
-			return pluginmodels.TSDBResponse{}, fmt.Errorf(
+			return pluginmodels.DataResponse{}, fmt.Errorf(
 				"could not find plugin corresponding to data source type: %q", ds.Type)
 		}
 
 		endpoint, err := factory(ds)
 		if err != nil {
-			return pluginmodels.TSDBResponse{}, fmt.Errorf("could not instantiate endpoint for TSDB plugin %q: %w",
+			return pluginmodels.DataResponse{}, fmt.Errorf("could not instantiate endpoint for data plugin %q: %w",
 				ds.Type, err)
 		}
-		return endpoint.TSDBQuery(ctx, ds, query)
+		return endpoint.DataQuery(ctx, ds, query)
 	}
 
-	return plugin.TSDBQuery(ctx, ds, query)
+	return plugin.DataQuery(ctx, ds, query)
+}
+
+// RegisterQueryHandler registers a query handler factory.
+// This is only exposed for tests!
+func (s *Service) RegisterQueryHandler(name string, factory func(*models.DataSource) (pluginmodels.DataPlugin, error)) {
+	s.registry[name] = factory
 }

@@ -12,8 +12,8 @@ import (
 	"github.com/timberio/go-datemath"
 )
 
-// TSDBSubQuery represents a TSDB sub-query.
-type TSDBSubQuery struct {
+// DataSubQuery represents a data sub-query.
+type DataSubQuery struct {
 	RefID         string             `json:"refId"`
 	Model         *simplejson.Json   `json:"model,omitempty"`
 	DataSource    *models.DataSource `json:"datasource"`
@@ -22,93 +22,93 @@ type TSDBSubQuery struct {
 	QueryType     string             `json:"queryType"`
 }
 
-// TSDBQuery contains all information about a TSDB query request.
-type TSDBQuery struct {
-	TimeRange *TSDBTimeRange
-	Queries   []TSDBSubQuery
+// DataQuery contains all information about a data query request.
+type DataQuery struct {
+	TimeRange *DataTimeRange
+	Queries   []DataSubQuery
 	Headers   map[string]string
 	Debug     bool
 	User      *models.SignedInUser
 }
 
-type TSDBTimeRange struct {
+type DataTimeRange struct {
 	From string
 	To   string
-	now  time.Time
+	Now  time.Time
 }
 
-type TSDBTable struct {
-	Columns []TSDBTableColumn `json:"columns"`
-	Rows    []TSDBRowValues   `json:"rows"`
+type DataTable struct {
+	Columns []DataTableColumn `json:"columns"`
+	Rows    []DataRowValues   `json:"rows"`
 }
 
-type TSDBTableColumn struct {
+type DataTableColumn struct {
 	Text string `json:"text"`
 }
 
-type TSDBTimePoint [2]null.Float
-type TSDBTimeSeriesPoints []TSDBTimePoint
-type TSDBTimeSeriesSlice []TSDBTimeSeries
-type TSDBRowValues []interface{}
+type DataTimePoint [2]null.Float
+type DataTimeSeriesPoints []DataTimePoint
+type DataTimeSeriesSlice []DataTimeSeries
+type DataRowValues []interface{}
 
-type TSDBQueryResult struct {
+type DataQueryResult struct {
 	Error       error               `json:"-"`
 	ErrorString string              `json:"error,omitempty"`
 	RefID       string              `json:"refId"`
 	Meta        *simplejson.Json    `json:"meta,omitempty"`
-	Series      TSDBTimeSeriesSlice `json:"series"`
-	Tables      []TSDBTable         `json:"tables"`
+	Series      DataTimeSeriesSlice `json:"series"`
+	Tables      []DataTable         `json:"tables"`
 	Dataframes  DataFrames          `json:"dataframes"`
 }
 
-type TSDBTimeSeries struct {
+type DataTimeSeries struct {
 	Name   string               `json:"name"`
-	Points TSDBTimeSeriesPoints `json:"points"`
+	Points DataTimeSeriesPoints `json:"points"`
 	Tags   map[string]string    `json:"tags,omitempty"`
 }
 
-type TSDBResponse struct {
-	Results map[string]TSDBQueryResult `json:"results"`
+type DataResponse struct {
+	Results map[string]DataQueryResult `json:"results"`
 	Message string                     `json:"message,omitempty"`
 }
 
-type TSDBPlugin interface {
-	TSDBQuery(ctx context.Context, ds *models.DataSource, query TSDBQuery) (TSDBResponse, error)
+type DataPlugin interface {
+	DataQuery(ctx context.Context, ds *models.DataSource, query DataQuery) (DataResponse, error)
 }
 
-func NewTSDBTimeRange(from, to string) TSDBTimeRange {
-	return TSDBTimeRange{
+func NewDataTimeRange(from, to string) DataTimeRange {
+	return DataTimeRange{
 		From: from,
 		To:   to,
-		now:  time.Now(),
+		Now:  time.Now(),
 	}
 }
 
-func (tr *TSDBTimeRange) GetFromAsMsEpoch() int64 {
+func (tr *DataTimeRange) GetFromAsMsEpoch() int64 {
 	return tr.MustGetFrom().UnixNano() / int64(time.Millisecond)
 }
 
-func (tr *TSDBTimeRange) GetFromAsSecondsEpoch() int64 {
+func (tr *DataTimeRange) GetFromAsSecondsEpoch() int64 {
 	return tr.GetFromAsMsEpoch() / 1000
 }
 
-func (tr *TSDBTimeRange) GetFromAsTimeUTC() time.Time {
+func (tr *DataTimeRange) GetFromAsTimeUTC() time.Time {
 	return tr.MustGetFrom().UTC()
 }
 
-func (tr *TSDBTimeRange) GetToAsMsEpoch() int64 {
+func (tr *DataTimeRange) GetToAsMsEpoch() int64 {
 	return tr.MustGetTo().UnixNano() / int64(time.Millisecond)
 }
 
-func (tr *TSDBTimeRange) GetToAsSecondsEpoch() int64 {
+func (tr *DataTimeRange) GetToAsSecondsEpoch() int64 {
 	return tr.GetToAsMsEpoch() / 1000
 }
 
-func (tr *TSDBTimeRange) GetToAsTimeUTC() time.Time {
+func (tr *DataTimeRange) GetToAsTimeUTC() time.Time {
 	return tr.MustGetTo().UTC()
 }
 
-func (tr *TSDBTimeRange) MustGetFrom() time.Time {
+func (tr *DataTimeRange) MustGetFrom() time.Time {
 	res, err := tr.ParseFrom()
 	if err != nil {
 		return time.Unix(0, 0)
@@ -116,7 +116,7 @@ func (tr *TSDBTimeRange) MustGetFrom() time.Time {
 	return res
 }
 
-func (tr *TSDBTimeRange) MustGetTo() time.Time {
+func (tr *DataTimeRange) MustGetTo() time.Time {
 	res, err := tr.ParseTo()
 	if err != nil {
 		return time.Unix(0, 0)
@@ -124,20 +124,20 @@ func (tr *TSDBTimeRange) MustGetTo() time.Time {
 	return res
 }
 
-func (tr TSDBTimeRange) ParseFrom() (time.Time, error) {
-	return parseTimeRange(tr.From, tr.now, false, nil)
+func (tr DataTimeRange) ParseFrom() (time.Time, error) {
+	return parseTimeRange(tr.From, tr.Now, false, nil)
 }
 
-func (tr TSDBTimeRange) ParseTo() (time.Time, error) {
-	return parseTimeRange(tr.To, tr.now, true, nil)
+func (tr DataTimeRange) ParseTo() (time.Time, error) {
+	return parseTimeRange(tr.To, tr.Now, true, nil)
 }
 
-func (tr TSDBTimeRange) ParseFromWithLocation(location *time.Location) (time.Time, error) {
-	return parseTimeRange(tr.From, tr.now, false, location)
+func (tr DataTimeRange) ParseFromWithLocation(location *time.Location) (time.Time, error) {
+	return parseTimeRange(tr.From, tr.Now, false, location)
 }
 
-func (tr TSDBTimeRange) ParseToWithLocation(location *time.Location) (time.Time, error) {
-	return parseTimeRange(tr.To, tr.now, true, location)
+func (tr DataTimeRange) ParseToWithLocation(location *time.Location) (time.Time, error) {
+	return parseTimeRange(tr.To, tr.Now, true, location)
 }
 
 func parseTimeRange(s string, now time.Time, withRoundUp bool, location *time.Location) (time.Time, error) {
@@ -163,12 +163,12 @@ func parseTimeRange(s string, now time.Time, withRoundUp bool, location *time.Lo
 	return now.Add(diff), nil
 }
 
-// SeriesToFrame converts a TSDBTimeSeries to an SDK frame.
-func SeriesToFrame(series TSDBTimeSeries) (*data.Frame, error) {
+// SeriesToFrame converts a DataTimeSeries to an SDK frame.
+func SeriesToFrame(series DataTimeSeries) (*data.Frame, error) {
 	timeVec := make([]*time.Time, len(series.Points))
 	floatVec := make([]*float64, len(series.Points))
 	for idx, point := range series.Points {
-		timeVec[idx], floatVec[idx] = convertTSDBTimePoint(point)
+		timeVec[idx], floatVec[idx] = convertDataTimePoint(point)
 	}
 	frame := data.NewFrame(series.Name,
 		data.NewField("time", nil, timeVec),
@@ -178,9 +178,9 @@ func SeriesToFrame(series TSDBTimeSeries) (*data.Frame, error) {
 	return frame, nil
 }
 
-// convertTSDBTimePoint converts a TSDBTimePoint into two values appropriate
+// convertDataTimePoint converts a DataTimePoint into two values appropriate
 // for Series values.
-func convertTSDBTimePoint(point TSDBTimePoint) (t *time.Time, f *float64) {
+func convertDataTimePoint(point DataTimePoint) (t *time.Time, f *float64) {
 	timeIdx, valueIdx := 1, 0
 	if point[timeIdx].Valid { // Assuming valid is null?
 		tI := int64(point[timeIdx].Float64)

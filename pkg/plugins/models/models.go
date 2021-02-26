@@ -6,11 +6,10 @@ import (
 	"fmt"
 
 	"github.com/grafana/grafana/pkg/models"
-	"github.com/grafana/grafana/pkg/plugins"
-	"github.com/grafana/grafana/pkg/plugins/backendplugin"
+	backendmodels "github.com/grafana/grafana/pkg/plugins/backendplugin/models"
 )
 
-var (
+const (
 	PluginTypeApp       = "app"
 	PluginTypeDashboard = "dashboard"
 )
@@ -40,8 +39,8 @@ func (e DuplicatePluginError) Is(err error) bool {
 
 // PluginLoader can load a plugin.
 type PluginLoader interface {
-	// Load loads a plugin and registers it with the manager.
-	Load(decoder *json.Decoder, base *PluginBase, backendPluginManager backendplugin.Manager) error
+	// Load loads a plugin and returns it.
+	Load(decoder *json.Decoder, base *PluginBase, backendPluginManager backendmodels.Manager) (interface{}, error)
 }
 
 // PluginBase is the base plugin type.
@@ -61,54 +60,19 @@ type PluginBase struct {
 	Signature    plugins.PluginSignatureStatus `json:"signature"`
 	Backend      bool                          `json:"backend"`
 
-	IncludedInAppId string                      `json:"-"`
-	PluginDir       string                      `json:"-"`
-	DefaultNavUrl   string                      `json:"-"`
-	IsCorePlugin    bool                        `json:"-"`
-	Files           []string                    `json:"-"`
-	SignatureType   plugins.PluginSignatureType `json:"-"`
-	SignatureOrg    string                      `json:"-"`
+	IncludedInAppId string              `json:"-"`
+	PluginDir       string              `json:"-"`
+	DefaultNavUrl   string              `json:"-"`
+	IsCorePlugin    bool                `json:"-"`
+	Files           []string            `json:"-"`
+	SignatureType   PluginSignatureType `json:"-"`
+	SignatureOrg    string              `json:"-"`
 
 	GrafanaNetVersion   string `json:"-"`
 	GrafanaNetHasUpdate bool   `json:"-"`
 
 	Root *PluginBase
 }
-
-/*
-func (pb *PluginBase) registerPlugin(base *PluginBase) error {
-	if p, exists := Plugins[pb.Id]; exists {
-		return DuplicatePluginError{Plugin: pb, ExistingPlugin: p}
-	}
-
-	if !strings.HasPrefix(base.PluginDir, setting.StaticRootPath) {
-		plog.Info("Registering plugin", "id", pb.Id)
-	}
-
-	if len(pb.Dependencies.Plugins) == 0 {
-		pb.Dependencies.Plugins = []PluginDependencyItem{}
-	}
-
-	if pb.Dependencies.GrafanaVersion == "" {
-		pb.Dependencies.GrafanaVersion = "*"
-	}
-
-	for _, include := range pb.Includes {
-		if include.Role == "" {
-			include.Role = models.ROLE_VIEWER
-		}
-	}
-
-	// Copy relevant fields from the base
-	pb.PluginDir = base.PluginDir
-	pb.Signature = base.Signature
-	pb.SignatureType = base.SignatureType
-	pb.SignatureOrg = base.SignatureOrg
-
-	Plugins[pb.Id] = pb
-	return nil
-}
-*/
 
 type PluginDependencies struct {
 	GrafanaVersion string                 `json:"grafanaVersion"`

@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"path"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"golang.org/x/net/context/ctxhttp"
@@ -25,17 +26,28 @@ type GraphiteExecutor struct {
 	HttpClient *http.Client
 }
 
-func NewExecutor(*models.DataSource) (pluginmodels.TSDBPlugin, error) {
+func NewExecutor(*models.DataSource) (pluginmodels.DataPlugin, error) {
 	return &GraphiteExecutor{}, nil
 }
 
 var glog = log.New("tsdb.graphite")
 
-func (e *GraphiteExecutor) TSDBQuery(ctx context.Context, dsInfo *models.DataSource, tsdbQuery pluginmodels.TSDBQuery) (
-	pluginmodels.TSDBResponse, error) {
+func (e *GraphiteExecutor) DataQuery(ctx context.Context, dsInfo *models.DataSource, tsdbQuery pluginmodels.DataQuery) (
+	pluginmodels.DataResponse, error) {
 
+	// This logic is used when called from Dashboard Alerting.
 	from := "-" + formatTimeRange(tsdbQuery.TimeRange.From)
 	until := formatTimeRange(tsdbQuery.TimeRange.To)
+
+	// This logic is used when called through server side expressions.
+	if isTimeRangeNumeric(*tsdbQuery.TimeRange) {
+		var err error
+		from, until, err = epochMStoGraphiteTime(*tsdbQuery.TimeRange)
+		if err != nil {
+			return pluginmodels.DataResponse{}, err
+		}
+	}
+
 	var target string
 
 	formData := url.Values{
@@ -64,7 +76,7 @@ func (e *GraphiteExecutor) TSDBQuery(ctx context.Context, dsInfo *models.DataSou
 
 	if target == "" {
 		glog.Error("No targets in query model", "models without targets", strings.Join(emptyQueries, "\n"))
-		return pluginmodels.TSDBResponse{}, errors.New("no query target found for the alert rule")
+		return pluginmodels.DataResponse{}, errors.New("no query target found for the alert rule")
 	}
 
 	formData["target"] = []string{target}
@@ -75,12 +87,12 @@ func (e *GraphiteExecutor) TSDBQuery(ctx context.Context, dsInfo *models.DataSou
 
 	req, err := e.createRequest(dsInfo, formData)
 	if err != nil {
-		return pluginmodels.TSDBResponse{}, err
+		return nil, err
 	}
 
 	httpClient, err := dsInfo.GetHttpClient()
 	if err != nil {
-		return pluginmodels.TSDBResponse{}, err
+		return pluginmodels.DataResponse{}, err
 	}
 
 	span, ctx := opentracing.StartSpanFromContext(ctx, "graphite query")
@@ -96,24 +108,24 @@ func (e *GraphiteExecutor) TSDBQuery(ctx context.Context, dsInfo *models.DataSou
 		span.Context(),
 		opentracing.HTTPHeaders,
 		opentracing.HTTPHeadersCarrier(req.Header)); err != nil {
-		return pluginmodels.TSDBResponse{}, err
+		return pluginmodels.DataResponse{}, err
 	}
 
 	res, err := ctxhttp.Do(ctx, httpClient, req)
 	if err != nil {
-		return pluginmodels.TSDBResponse{}, err
+		return pluginmodels.DataResponse{}, err
 	}
 
 	data, err := e.parseResponse(res)
 	if err != nil {
-		return pluginmodels.TSDBResponse{}, err
+		return pluginmodels.DataResponse{}, err
 	}
 
-	result := pluginmodels.TSDBResponse{}
-	result.Results = make(map[string]pluginmodels.TSDBQueryResult)
-	queryRes := pluginmodels.TSDBQueryResult{}
+	result := pluginmodels.DataResponse{}
+	result.Results = make(map[string]pluginmodels.DataQueryResult)
+	queryRes := pluginmodels.DataQueryResult{}
 	for _, series := range data {
-		queryRes.Series = append(queryRes.Series, pluginmodels.TSDBTimeSeries{
+		queryRes.Series = append(queryRes.Series, pluginmodels.DataTimeSeries{
 			Name:   series.Target,
 			Points: series.DataPoints,
 		})
@@ -150,6 +162,12 @@ func (e *GraphiteExecutor) parseResponse(res *http.Response) ([]TargetResponseDT
 		return nil, err
 	}
 
+	for si := range data {
+		// Convert Response to timestamps MS
+		for pi, point := range data[si].DataPoints {
+			data[si].DataPoints[pi][1].Float64 = point[1].Float64 * 1000
+		}
+	}
 	return data, nil
 }
 
@@ -191,4 +209,28 @@ func fixIntervalFormat(target string) string {
 		return strings.ReplaceAll(M, "M", "mon")
 	})
 	return target
+}
+
+func isTimeRangeNumeric(tr pluginmodels.DataTimeRange) bool {
+	if _, err := strconv.ParseInt(tr.From, 10, 64); err != nil {
+		return false
+	}
+	if _, err := strconv.ParseInt(tr.To, 10, 64); err != nil {
+		return false
+	}
+	return true
+}
+
+func epochMStoGraphiteTime(tr pluginmodels.DataTimeRange) (string, string, error) {
+	from, err := strconv.ParseInt(tr.From, 10, 64)
+	if err != nil {
+		return "", "", err
+	}
+
+	to, err := strconv.ParseInt(tr.To, 10, 64)
+	if err != nil {
+		return "", "", err
+	}
+
+	return fmt.Sprintf("%d", from/1000), fmt.Sprintf("%d", to/1000), nil
 }

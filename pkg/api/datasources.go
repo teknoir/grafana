@@ -35,6 +35,7 @@ func (hs *HTTPServer) GetDataSources(c *models.ReqContext) response.Response {
 			Name:      ds.Name,
 			Url:       ds.Url,
 			Type:      ds.Type,
+			TypeName:  ds.Type,
 			Access:    ds.Access,
 			Password:  ds.Password,
 			Database:  ds.Database,
@@ -47,6 +48,7 @@ func (hs *HTTPServer) GetDataSources(c *models.ReqContext) response.Response {
 
 		if plugin, exists := hs.PluginManager.DataSources[ds.Type]; exists {
 			dsItem.TypeLogoUrl = plugin.Info.Logos.Small
+			dsItem.TypeName = plugin.Name
 		} else {
 			dsItem.TypeLogoUrl = "public/img/icn-datasource.svg"
 		}

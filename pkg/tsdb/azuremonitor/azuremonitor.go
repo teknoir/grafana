@@ -42,7 +42,7 @@ type AzureMonitorExecutor struct {
 }
 
 // NewAzureMonitorExecutor initializes a http client
-func (s *Service) NewExecutor(dsInfo *models.DataSource) (pluginmodels.TSDBPlugin, error) {
+func (s *Service) NewExecutor(dsInfo *models.DataSource) (pluginmodels.DataPlugin, error) {
 	httpClient, err := dsInfo.GetHttpClient()
 	if err != nil {
 		return nil, err
@@ -59,14 +59,14 @@ func (s *Service) NewExecutor(dsInfo *models.DataSource) (pluginmodels.TSDBPlugi
 // expected by chosen Azure Monitor service (Azure Monitor, App Insights etc.)
 // executes the queries against the API and parses the response into
 // the right format
-func (e *AzureMonitorExecutor) TSDBQuery(ctx context.Context, dsInfo *models.DataSource,
-	tsdbQuery pluginmodels.TSDBQuery) (pluginmodels.TSDBResponse, error) {
+func (e *AzureMonitorExecutor) DataQuery(ctx context.Context, dsInfo *models.DataSource,
+	tsdbQuery pluginmodels.DataQuery) (pluginmodels.DataResponse, error) {
 	var err error
 
-	var azureMonitorQueries []pluginmodels.TSDBSubQuery
-	var applicationInsightsQueries []pluginmodels.TSDBSubQuery
-	var azureLogAnalyticsQueries []pluginmodels.TSDBSubQuery
-	var insightsAnalyticsQueries []pluginmodels.TSDBSubQuery
+	var azureMonitorQueries []pluginmodels.DataSubQuery
+	var applicationInsightsQueries []pluginmodels.DataSubQuery
+	var azureLogAnalyticsQueries []pluginmodels.DataSubQuery
+	var insightsAnalyticsQueries []pluginmodels.DataSubQuery
 
 	for _, query := range tsdbQuery.Queries {
 		queryType := query.Model.Get("queryType").MustString("")
@@ -81,7 +81,7 @@ func (e *AzureMonitorExecutor) TSDBQuery(ctx context.Context, dsInfo *models.Dat
 		case "Insights Analytics":
 			insightsAnalyticsQueries = append(insightsAnalyticsQueries, query)
 		default:
-			return pluginmodels.TSDBResponse{}, fmt.Errorf("alerting not supported for %q", queryType)
+			return pluginmodels.DataResponse{}, fmt.Errorf("alerting not supported for %q", queryType)
 		}
 	}
 
@@ -111,22 +111,22 @@ func (e *AzureMonitorExecutor) TSDBQuery(ctx context.Context, dsInfo *models.Dat
 
 	azResult, err := azDatasource.executeTimeSeriesQuery(ctx, azureMonitorQueries, *tsdbQuery.TimeRange)
 	if err != nil {
-		return pluginmodels.TSDBResponse{}, err
+		return pluginmodels.DataResponse{}, err
 	}
 
 	aiResult, err := aiDatasource.executeTimeSeriesQuery(ctx, applicationInsightsQueries, *tsdbQuery.TimeRange)
 	if err != nil {
-		return pluginmodels.TSDBResponse{}, err
+		return pluginmodels.DataResponse{}, err
 	}
 
 	alaResult, err := alaDatasource.executeTimeSeriesQuery(ctx, azureLogAnalyticsQueries, *tsdbQuery.TimeRange)
 	if err != nil {
-		return pluginmodels.TSDBResponse{}, err
+		return pluginmodels.DataResponse{}, err
 	}
 
 	iaResult, err := iaDatasource.executeTimeSeriesQuery(ctx, insightsAnalyticsQueries, *tsdbQuery.TimeRange)
 	if err != nil {
-		return pluginmodels.TSDBResponse{}, err
+		return pluginmodels.DataResponse{}, err
 	}
 
 	for k, v := range aiResult.Results {

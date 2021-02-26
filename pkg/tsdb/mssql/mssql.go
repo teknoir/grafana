@@ -20,7 +20,7 @@ import (
 
 var logger = log.New("tsdb.mssql")
 
-func NewExecutor(datasource *models.DataSource) (pluginmodels.TSDBPlugin, error) {
+func NewExecutor(datasource *models.DataSource) (pluginmodels.DataPlugin, error) {
 	cnnstr, err := generateConnectionString(datasource)
 	if err != nil {
 		return nil, err
@@ -103,7 +103,7 @@ type mssqlQueryResultTransformer struct {
 }
 
 func (t *mssqlQueryResultTransformer) TransformQueryResult(columnTypes []*sql.ColumnType, rows *core.Rows) (
-	pluginmodels.TSDBRowValues, error) {
+	pluginmodels.DataRowValues, error) {
 	values := make([]interface{}, len(columnTypes))
 	valuePtrs := make([]interface{}, len(columnTypes))
 

@@ -40,7 +40,7 @@ func (bat basicAuthTransport) RoundTrip(req *http.Request) (*http.Response, erro
 	return bat.Transport.RoundTrip(req)
 }
 
-func NewExecutor(dsInfo *models.DataSource) (pluginmodels.TSDBPlugin, error) {
+func NewExecutor(dsInfo *models.DataSource) (pluginmodels.DataPlugin, error) {
 	transport, err := dsInfo.GetHttpTransport()
 	if err != nil {
 		return nil, err
@@ -83,10 +83,10 @@ func (e *PrometheusExecutor) getClient(dsInfo *models.DataSource) (apiv1.API, er
 	return apiv1.NewAPI(client), nil
 }
 
-func (e *PrometheusExecutor) TSDBQuery(ctx context.Context, dsInfo *models.DataSource,
-	tsdbQuery pluginmodels.TSDBQuery) (pluginmodels.TSDBResponse, error) {
-	result := pluginmodels.TSDBResponse{
-		Results: map[string]pluginmodels.TSDBQueryResult{},
+func (e *PrometheusExecutor) DataQuery(ctx context.Context, dsInfo *models.DataSource,
+	tsdbQuery pluginmodels.DataQuery) (pluginmodels.DataResponse, error) {
+	result := pluginmodels.DataResponse{
+		Results: map[string]pluginmodels.DataQueryResult{},
 	}
 
 	client, err := e.getClient(dsInfo)
@@ -148,7 +148,7 @@ func formatLegend(metric model.Metric, query *PrometheusQuery) string {
 	return string(result)
 }
 
-func (e *PrometheusExecutor) parseQuery(dsInfo *models.DataSource, query pluginmodels.TSDBQuery) (
+func (e *PrometheusExecutor) parseQuery(dsInfo *models.DataSource, query pluginmodels.DataQuery) (
 	[]*PrometheusQuery, error) {
 	qs := []*PrometheusQuery{}
 	for _, queryModel := range query.Queries {
@@ -191,8 +191,8 @@ func (e *PrometheusExecutor) parseQuery(dsInfo *models.DataSource, query pluginm
 	return qs, nil
 }
 
-func parseResponse(value model.Value, query *PrometheusQuery) (pluginmodels.TSDBQueryResult, error) {
-	var queryRes pluginmodels.TSDBQueryResult
+func parseResponse(value model.Value, query *PrometheusQuery) (pluginmodels.DataQueryResult, error) {
+	var queryRes pluginmodels.DataQueryResult
 
 	data, ok := value.(model.Matrix)
 	if !ok {
@@ -200,10 +200,10 @@ func parseResponse(value model.Value, query *PrometheusQuery) (pluginmodels.TSDB
 	}
 
 	for _, v := range data {
-		series := pluginmodels.TSDBTimeSeries{
+		series := pluginmodels.DataTimeSeries{
 			Name:   formatLegend(v.Metric, query),
 			Tags:   make(map[string]string, len(v.Metric)),
-			Points: make([]pluginmodels.TSDBTimePoint, 0, len(v.Values)),
+			Points: make([]pluginmodels.DataTimePoint, 0, len(v.Values)),
 		}
 
 		for k, v := range v.Metric {
@@ -211,7 +211,7 @@ func parseResponse(value model.Value, query *PrometheusQuery) (pluginmodels.TSDB
 		}
 
 		for _, k := range v.Values {
-			series.Points = append(series.Points, pluginmodels.TSDBTimePoint{
+			series.Points = append(series.Points, pluginmodels.DataTimePoint{
 				null.FloatFrom(float64(k.Value)),
 				null.FloatFrom(float64(k.Timestamp.Unix() * 1000)),
 			})

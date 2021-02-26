@@ -35,10 +35,10 @@ type DashboardProvisioningService interface {
 }
 
 // NewService factory for creating a new dashboard service
-var NewService = func(requestHandler tsdbifaces.RequestHandler) DashboardService {
+var NewService = func(reqHandler tsdbifaces.RequestHandler) DashboardService {
 	return &dashboardServiceImpl{
-		requestHandler: requestHandler,
-		log:            log.New("dashboard-service"),
+		log:        log.New("dashboard-service"),
+		reqHandler: reqHandler,
 	}
 }
 
@@ -59,10 +59,10 @@ type SaveDashboardDTO struct {
 }
 
 type dashboardServiceImpl struct {
-	orgId          int64
-	user           *models.SignedInUser
-	log            log.Logger
-	requestHandler tsdbifaces.RequestHandler
+	orgId      int64
+	user       *models.SignedInUser
+	log        log.Logger
+	reqHandler tsdbifaces.RequestHandler
 }
 
 func (dr *dashboardServiceImpl) GetProvisionedDashboardData(name string) ([]*models.DashboardProvisioning, error) {

@@ -17,9 +17,9 @@ import (
 	"golang.org/x/net/context/ctxhttp"
 )
 
-func (timeSeriesFilter *cloudMonitoringTimeSeriesFilter) run(ctx context.Context, tsdbQuery pluginmodels.TSDBQuery,
-	e *Executor) (pluginmodels.TSDBQueryResult, cloudMonitoringResponse, string, error) {
-	queryResult := pluginmodels.TSDBQueryResult{Meta: simplejson.New(), RefID: timeSeriesFilter.RefID}
+func (timeSeriesFilter *cloudMonitoringTimeSeriesFilter) run(ctx context.Context, tsdbQuery pluginmodels.DataQuery,
+	e *Executor) (pluginmodels.DataQueryResult, cloudMonitoringResponse, string, error) {
+	queryResult := pluginmodels.DataQueryResult{Meta: simplejson.New(), RefID: timeSeriesFilter.RefID}
 	projectName := timeSeriesFilter.ProjectName
 	if projectName == "" {
 		defaultProject, err := e.getDefaultProject(ctx)
@@ -79,7 +79,8 @@ func (timeSeriesFilter *cloudMonitoringTimeSeriesFilter) run(ctx context.Context
 	return queryResult, data, req.URL.RawQuery, nil
 }
 
-func (timeSeriesFilter *cloudMonitoringTimeSeriesFilter) parseResponse(queryRes pluginmodels.TSDBQueryResult, response cloudMonitoringResponse, executedQueryString string) error {
+func (timeSeriesFilter *cloudMonitoringTimeSeriesFilter) parseResponse(queryRes *pluginmodels.DataQueryResult,
+	response cloudMonitoringResponse, executedQueryString string) error {
 	labels := make(map[string]map[string]bool)
 	frames := data.Frames{}
 	for _, series := range response.TimeSeries {
@@ -200,7 +201,8 @@ func (timeSeriesFilter *cloudMonitoringTimeSeriesFilter) parseResponse(queryRes 
 					additionalLabels := data.Labels{"bucket": bucketBound}
 					timeField := data.NewField(data.TimeSeriesTimeFieldName, nil, []time.Time{})
 					valueField := data.NewField(data.TimeSeriesValueFieldName, nil, []float64{})
-					frameName := formatLegendKeys(series.Metric.Type, defaultMetricName, seriesLabels, additionalLabels, timeSeriesFilter)
+					frameName := formatLegendKeys(series.Metric.Type, defaultMetricName, seriesLabels,
+						additionalLabels, timeSeriesFilter)
 					valueField.Name = frameName
 					valueField.Labels = seriesLabels
 					setDisplayNameAsFieldName(valueField)
@@ -240,7 +242,8 @@ func (timeSeriesFilter *cloudMonitoringTimeSeriesFilter) parseResponse(queryRes 
 }
 
 func (timeSeriesFilter *cloudMonitoringTimeSeriesFilter) handleNonDistributionSeries(series timeSeries,
-	defaultMetricName string, seriesLabels map[string]string, queryRes pluginmodels.TSDBQueryResult, frame *data.Frame) {
+	defaultMetricName string, seriesLabels map[string]string, queryRes *pluginmodels.DataQueryResult,
+	frame *data.Frame) {
 	for i := 0; i < len(series.Points); i++ {
 		point := series.Points[i]
 		value := point.Value.DoubleValue
@@ -269,28 +272,36 @@ func (timeSeriesFilter *cloudMonitoringTimeSeriesFilter) handleNonDistributionSe
 	setDisplayNameAsFieldName(dataField)
 }
 
-func (timeSeriesFilter *cloudMonitoringTimeSeriesFilter) parseToAnnotations(queryRes pluginmodels.TSDBQueryResult,
-	data cloudMonitoringResponse, title string, text string, tags string) error {
-	annotations := make([]map[string]string, 0)
-
-	for _, series := range data.TimeSeries {
-		// reverse the order to be ascending
+func (timeSeriesFilter *cloudMonitoringTimeSeriesFilter) parseToAnnotations(queryRes *pluginmodels.DataQueryResult,
+	response cloudMonitoringResponse, title string, text string, tags string) error {
+	frames := data.Frames{}
+	for _, series := range response.TimeSeries {
+		if len(series.Points) == 0 {
+			continue
+		}
+		annotation := make(map[string][]string)
 		for i := len(series.Points) - 1; i >= 0; i-- {
 			point := series.Points[i]
 			value := strconv.FormatFloat(point.Value.DoubleValue, 'f', 6, 64)
 			if series.ValueType == "STRING" {
 				value = point.Value.StringValue
 			}
-			annotation := make(map[string]string)
-			annotation["time"] = point.Interval.EndTime.UTC().Format(time.RFC3339)
-			annotation["title"] = formatAnnotationText(title, value, series.Metric.Type, series.Metric.Labels, series.Resource.Labels)
-			annotation["tags"] = tags
-			annotation["text"] = formatAnnotationText(text, value, series.Metric.Type, series.Metric.Labels, series.Resource.Labels)
-			annotations = append(annotations, annotation)
+			annotation["time"] = append(annotation["time"], point.Interval.EndTime.UTC().Format(time.RFC3339))
+			annotation["title"] = append(annotation["title"], formatAnnotationText(title, value, series.Metric.Type,
+				series.Metric.Labels, series.Resource.Labels))
+			annotation["tags"] = append(annotation["tags"], tags)
+			annotation["text"] = append(annotation["text"], formatAnnotationText(text, value, series.Metric.Type,
+				series.Metric.Labels, series.Resource.Labels))
 		}
+		frames = append(frames, data.NewFrame(queryRes.RefID,
+			data.NewField("time", nil, annotation["time"]),
+			data.NewField("title", nil, annotation["title"]),
+			data.NewField("tags", nil, annotation["tags"]),
+			data.NewField("text", nil, annotation["text"]),
+		))
 	}
+	queryRes.Dataframes = pluginmodels.NewDecodedDataFrames(frames)
 
-	transformAnnotationToTable(annotations, queryRes)
 	return nil
 }
 
@@ -309,7 +320,8 @@ func (timeSeriesFilter *cloudMonitoringTimeSeriesFilter) buildDeepLink() string 
 
 	u, err := url.Parse("https://console.cloud.google.com/monitoring/metrics-explorer")
 	if err != nil {
-		slog.Error("Failed to generate deep link: unable to parse metrics explorer URL", "ProjectName", timeSeriesFilter.ProjectName, "query", timeSeriesFilter.RefID)
+		slog.Error("Failed to generate deep link: unable to parse metrics explorer URL", "ProjectName",
+			timeSeriesFilter.ProjectName, "query", timeSeriesFilter.RefID)
 		return ""
 	}
 
@@ -349,7 +361,8 @@ func (timeSeriesFilter *cloudMonitoringTimeSeriesFilter) buildDeepLink() string 
 
 	blob, err := json.Marshal(pageState)
 	if err != nil {
-		slog.Error("Failed to generate deep link", "pageState", pageState, "ProjectName", timeSeriesFilter.ProjectName, "query", timeSeriesFilter.RefID)
+		slog.Error("Failed to generate deep link", "pageState", pageState, "ProjectName", timeSeriesFilter.ProjectName,
+			"query", timeSeriesFilter.RefID)
 		return ""
 	}
 
@@ -358,7 +371,8 @@ func (timeSeriesFilter *cloudMonitoringTimeSeriesFilter) buildDeepLink() string 
 
 	accountChooserURL, err := url.Parse("https://accounts.google.com/AccountChooser")
 	if err != nil {
-		slog.Error("Failed to generate deep link: unable to parse account chooser URL", "ProjectName", timeSeriesFilter.ProjectName, "query", timeSeriesFilter.RefID)
+		slog.Error("Failed to generate deep link: unable to parse account chooser URL", "ProjectName",
+			timeSeriesFilter.ProjectName, "query", timeSeriesFilter.RefID)
 		return ""
 	}
 	accountChooserQuery := accountChooserURL.Query()

@@ -42,26 +42,28 @@ const azureMonitorAPIVersion = "2018-01-01"
 // 1. build the AzureMonitor url and querystring for each query
 // 2. executes each query by calling the Azure Monitor API
 // 3. parses the responses for each query into the timeseries format
-func (e *AzureMonitorDatasource) executeTimeSeriesQuery(ctx context.Context, originalQueries []pluginmodels.TSDBSubQuery,
-	timeRange pluginmodels.TSDBTimeRange) (pluginmodels.TSDBResponse, error) {
-	result := pluginmodels.TSDBResponse{
-		Results: map[string]pluginmodels.TSDBQueryResult{},
+func (e *AzureMonitorDatasource) executeTimeSeriesQuery(ctx context.Context, originalQueries []pluginmodels.DataSubQuery,
+	timeRange pluginmodels.DataTimeRange) (pluginmodels.DataResponse, error) {
+	result := pluginmodels.DataResponse{
+		Results: map[string]pluginmodels.DataQueryResult{},
 	}
 
 	queries, err := e.buildQueries(originalQueries, timeRange)
 	if err != nil {
-		return pluginmodels.TSDBResponse{}, err
+		return pluginmodels.DataResponse{}, err
 	}
 
 	for _, query := range queries {
 		queryRes, resp, err := e.executeQuery(ctx, query, originalQueries, timeRange)
 		if err != nil {
-			return pluginmodels.TSDBResponse{}, err
+			return pluginmodels.DataResponse{}, err
 		}
 
-		err = e.parseResponse(queryRes, resp, query)
+		frames, err := e.parseResponse(resp, query)
 		if err != nil {
 			queryRes.Error = err
+		} else {
+			queryRes.Dataframes = frames
 		}
 		result.Results[query.RefID] = queryRes
 	}
@@ -69,7 +71,7 @@ func (e *AzureMonitorDatasource) executeTimeSeriesQuery(ctx context.Context, ori
 	return result, nil
 }
 
-func (e *AzureMonitorDatasource) buildQueries(queries []pluginmodels.TSDBSubQuery, timeRange pluginmodels.TSDBTimeRange) ([]*AzureMonitorQuery, error) {
+func (e *AzureMonitorDatasource) buildQueries(queries []pluginmodels.DataSubQuery, timeRange pluginmodels.DataTimeRange) ([]*AzureMonitorQuery, error) {
 	azureMonitorQueries := []*AzureMonitorQuery{}
 	startTime, err := timeRange.ParseFrom()
 	if err != nil {
@@ -171,9 +173,9 @@ func (e *AzureMonitorDatasource) buildQueries(queries []pluginmodels.TSDBSubQuer
 	return azureMonitorQueries, nil
 }
 
-func (e *AzureMonitorDatasource) executeQuery(ctx context.Context, query *AzureMonitorQuery, queries []pluginmodels.TSDBSubQuery,
-	timeRange pluginmodels.TSDBTimeRange) (pluginmodels.TSDBQueryResult, AzureMonitorResponse, error) {
-	queryResult := pluginmodels.TSDBQueryResult{RefID: query.RefID}
+func (e *AzureMonitorDatasource) executeQuery(ctx context.Context, query *AzureMonitorQuery, queries []pluginmodels.DataSubQuery,
+	timeRange pluginmodels.DataTimeRange) (pluginmodels.DataQueryResult, AzureMonitorResponse, error) {
+	queryResult := pluginmodels.DataQueryResult{RefID: query.RefID}
 
 	req, err := e.createRequest(ctx, e.dsInfo)
 	if err != nil {
@@ -282,9 +284,10 @@ func (e *AzureMonitorDatasource) unmarshalResponse(res *http.Response) (AzureMon
 	return data, nil
 }
 
-func (e *AzureMonitorDatasource) parseResponse(queryRes pluginmodels.TSDBQueryResult, amr AzureMonitorResponse, query *AzureMonitorQuery) error {
+func (e *AzureMonitorDatasource) parseResponse(amr AzureMonitorResponse, query *AzureMonitorQuery) (
+	pluginmodels.DataFrames, error) {
 	if len(amr.Value) == 0 {
-		return nil
+		return nil, nil
 	}
 
 	frames := data.Frames{}
@@ -342,9 +345,7 @@ func (e *AzureMonitorDatasource) parseResponse(queryRes pluginmodels.TSDBQueryRe
 		frames = append(frames, frame)
 	}
 
-	queryRes.Dataframes = pluginmodels.NewDecodedDataFrames(frames)
-
-	return nil
+	return pluginmodels.NewDecodedDataFrames(frames), nil
 }
 
 // formatAzureMonitorLegendKey builds the legend key or timeseries name

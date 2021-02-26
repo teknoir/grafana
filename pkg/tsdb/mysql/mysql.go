@@ -24,7 +24,7 @@ func characterEscape(s string, escapeChar string) string {
 	return strings.ReplaceAll(s, escapeChar, url.QueryEscape(escapeChar))
 }
 
-func NewExecutor(datasource *models.DataSource) (pluginmodels.TSDBPlugin, error) {
+func NewExecutor(datasource *models.DataSource) (pluginmodels.DataPlugin, error) {
 	logger := log.New("tsdb.mysql")
 
 	protocol := "tcp"
@@ -77,7 +77,7 @@ type mysqlQueryResultTransformer struct {
 }
 
 func (t *mysqlQueryResultTransformer) TransformQueryResult(columnTypes []*sql.ColumnType, rows *core.Rows) (
-	pluginmodels.TSDBRowValues, error) {
+	pluginmodels.DataRowValues, error) {
 	values := make([]interface{}, len(columnTypes))
 
 	for i := range values {

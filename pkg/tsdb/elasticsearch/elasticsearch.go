@@ -16,22 +16,22 @@ type Executor struct {
 }
 
 // NewExecutor creates a new Executor.
-func NewExecutor(*models.DataSource) (pluginmodels.TSDBPlugin, error) {
+func NewExecutor(*models.DataSource) (pluginmodels.DataPlugin, error) {
 	return &Executor{
 		intervalCalculator: interval.NewCalculator(),
 	}, nil
 }
 
 // Query handles an elasticsearch datasource request
-func (e *Executor) TSDBQuery(ctx context.Context, dsInfo *models.DataSource,
-	tsdbQuery pluginmodels.TSDBQuery) (pluginmodels.TSDBResponse, error) {
+func (e *Executor) DataQuery(ctx context.Context, dsInfo *models.DataSource,
+	tsdbQuery pluginmodels.DataQuery) (pluginmodels.DataResponse, error) {
 	if len(tsdbQuery.Queries) == 0 {
-		return pluginmodels.TSDBResponse{}, fmt.Errorf("query contains no queries")
+		return pluginmodels.DataResponse{}, fmt.Errorf("query contains no queries")
 	}
 
 	client, err := es.NewClient(ctx, dsInfo, *tsdbQuery.TimeRange)
 	if err != nil {
-		return pluginmodels.TSDBResponse{}, err
+		return pluginmodels.DataResponse{}, err
 	}
 
 	if tsdbQuery.Debug {

@@ -13,15 +13,12 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/grafana/grafana/pkg/plugins/manager"
-	"github.com/grafana/grafana/pkg/services/dashboards"
+	"github.com/grafana/grafana/pkg/services/alerting"
 	"github.com/grafana/grafana/pkg/services/live"
 	"github.com/grafana/grafana/pkg/services/search"
 	"github.com/grafana/grafana/pkg/services/shorturls"
 	"github.com/grafana/grafana/pkg/services/sqlstore"
 	"github.com/grafana/grafana/pkg/tsdb"
-
-	"github.com/grafana/grafana/pkg/plugins/backendplugin"
 
 	"github.com/grafana/grafana/pkg/api/routing"
 	httpstatic "github.com/grafana/grafana/pkg/api/static"
@@ -32,6 +29,8 @@ import (
 	"github.com/grafana/grafana/pkg/infra/remotecache"
 	"github.com/grafana/grafana/pkg/middleware"
 	"github.com/grafana/grafana/pkg/models"
+	backendmodels "github.com/grafana/grafana/pkg/plugins/backendplugin/models"
+	"github.com/grafana/grafana/pkg/plugins/plugindashboards"
 	"github.com/grafana/grafana/pkg/registry"
 	"github.com/grafana/grafana/pkg/services/contexthandler"
 	"github.com/grafana/grafana/pkg/services/datasources"
@@ -76,7 +75,7 @@ type HTTPServer struct {
 	ProvisioningService    provisioning.ProvisioningService   `inject:""`
 	Login                  *login.LoginService                `inject:""`
 	License                models.Licensing                   `inject:""`
-	BackendPluginManager   backendplugin.Manager              `inject:""`
+	BackendPluginManager   backendmodels.Manager              `inject:""`
 	PluginRequestValidator models.PluginRequestValidator      `inject:""`
 	PluginManager          *manager.PluginManager             `inject:""`
 	SearchService          *search.SearchService              `inject:""`
@@ -85,7 +84,9 @@ type HTTPServer struct {
 	ContextHandler         *contexthandler.ContextHandler     `inject:""`
 	SQLStore               *sqlstore.SQLStore                 `inject:""`
 	LibraryPanelService    *librarypanels.LibraryPanelService `inject:""`
-	TSDBService            *tsdb.Service                      `inject:""`
+	DataService            *tsdb.Service                      `inject:""`
+	PluginDashboardService *plugindashboards.Service          `inject:""`
+	AlertEngine            *alerting.AlertEngine              `inject:""`
 	Listener               net.Listener
 	dashboardService       dashboards.DashboardService
 }

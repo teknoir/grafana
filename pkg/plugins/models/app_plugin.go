@@ -6,15 +6,16 @@ import (
 
 	"github.com/gosimple/slug"
 	"github.com/grafana/grafana/pkg/models"
-	"github.com/grafana/grafana/pkg/plugins/backendplugin"
 	"github.com/grafana/grafana/pkg/plugins/backendplugin/grpcplugin"
+	backendmodels "github.com/grafana/grafana/pkg/plugins/backendplugin/models"
 	"github.com/grafana/grafana/pkg/setting"
 	"github.com/grafana/grafana/pkg/util/errutil"
 )
 
 type AppPlugin struct {
 	FrontendPluginBase
-	Routes []*AppPluginRoute `json:"routes"`
+	Routes      []*AppPluginRoute `json:"routes"`
+	AutoEnabled bool              `json:"autoEnabled"`
 
 	FoundChildPlugins []*PluginInclude `json:"-"`
 	Pinned            bool             `json:"-"`
@@ -57,60 +58,50 @@ type JwtTokenAuth struct {
 	Params map[string]string `json:"params"`
 }
 
-func (app *AppPlugin) Loadd(decoder *json.Decoder, base *PluginBase, backendPluginManager backendplugin.Manager) error {
+func (app *AppPlugin) Load(decoder *json.Decoder, base *PluginBase, backendPluginManager backendmodels.Manager) (
+	interface{}, error) {
 	if err := decoder.Decode(app); err != nil {
-		return err
+		return nil, err
 	}
-
-	/*
-		if err := app.registerPlugin(base); err != nil {
-			return err
-		}
-	*/
 
 	if app.Backend {
 		cmd := ComposePluginStartCommand(app.Executable)
 		fullpath := filepath.Join(app.PluginDir, cmd)
 		factory := grpcplugin.NewBackendPlugin(app.Id, fullpath, grpcplugin.PluginStartFuncs{})
 		if err := backendPluginManager.Register(app.Id, factory); err != nil {
-			return errutil.Wrapf(err, "failed to register backend plugin")
+			return nil, errutil.Wrapf(err, "failed to register backend plugin")
 		}
 	}
 
-	/*
-		Apps[app.Id] = app
-	*/
-	return nil
+	return app, nil
 }
 
-func (app *AppPlugin) InitApp() {
+func (app *AppPlugin) InitApp(panels map[string]*PanelPlugin, dataSources map[string]*DataSourcePlugin) {
 	app.InitFrontendPlugin()
 
-	/*
-			// check if we have child panels
-			for _, panel := range Panels {
-				if strings.HasPrefix(panel.PluginDir, app.PluginDir) {
-					panel.setPathsBasedOnApp(app)
-					app.FoundChildPlugins = append(app.FoundChildPlugins, &PluginInclude{
-						Name: panel.Name,
-						Id:   panel.Id,
-						Type: panel.Type,
-					})
-				}
-			}
-
-		// check if we have child datasources
-		for _, ds := range app.Manager.DataSources {
-			if strings.HasPrefix(ds.PluginDir, app.PluginDir) {
-				ds.setPathsBasedOnApp(app)
-				app.FoundChildPlugins = append(app.FoundChildPlugins, &PluginInclude{
-					Name: ds.Name,
-					Id:   ds.Id,
-					Type: ds.Type,
-				})
-			}
+	// check if we have child panels
+	for _, panel := range panels {
+		if strings.HasPrefix(panel.PluginDir, app.PluginDir) {
+			panel.setPathsBasedOnApp(app)
+			app.FoundChildPlugins = append(app.FoundChildPlugins, &PluginInclude{
+				Name: panel.Name,
+				Id:   panel.Id,
+				Type: panel.Type,
+			})
 		}
-	*/
+	}
+
+	// check if we have child datasources
+	for _, ds := range dataSources {
+		if strings.HasPrefix(ds.PluginDir, app.PluginDir) {
+			ds.setPathsBasedOnApp(app)
+			app.FoundChildPlugins = append(app.FoundChildPlugins, &PluginInclude{
+				Name: ds.Name,
+				Id:   ds.Id,
+				Type: ds.Type,
+			})
+		}
+	}
 
 	// slugify pages
 	for _, include := range app.Includes {

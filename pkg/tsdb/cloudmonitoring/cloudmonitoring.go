@@ -16,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/grafana/grafana/pkg/plugins"
 	"github.com/grafana/grafana/pkg/registry"
 
 	"github.com/grafana/grafana-plugin-sdk-go/data"
@@ -23,7 +24,6 @@ import (
 	"github.com/grafana/grafana/pkg/components/simplejson"
 	"github.com/grafana/grafana/pkg/infra/log"
 	"github.com/grafana/grafana/pkg/models"
-	"github.com/grafana/grafana/pkg/plugins/manager"
 	pluginmodels "github.com/grafana/grafana/pkg/plugins/models"
 	"github.com/grafana/grafana/pkg/setting"
 	"golang.org/x/oauth2/google"
@@ -88,7 +88,7 @@ type Executor struct {
 }
 
 // NewExecutor returns an Executor.
-func (s *Service) NewExecutor(dsInfo *models.DataSource) (pluginmodels.TSDBPlugin, error) {
+func (s *Service) NewExecutor(dsInfo *models.DataSource) (pluginmodels.DataPlugin, error) {
 	httpClient, err := dsInfo.GetHttpClient()
 	if err != nil {
 		return nil, err
@@ -108,9 +108,9 @@ func init() {
 // Query takes in the frontend queries, parses them into the CloudMonitoring query format
 // executes the queries against the CloudMonitoring API and parses the response into
 // the time series or table format
-func (e *Executor) TSDBQuery(ctx context.Context, dsInfo *models.DataSource, tsdbQuery pluginmodels.TSDBQuery) (
-	pluginmodels.TSDBResponse, error) {
-	var result pluginmodels.TSDBResponse
+func (e *Executor) DataQuery(ctx context.Context, dsInfo *models.DataSource, tsdbQuery pluginmodels.DataQuery) (
+	pluginmodels.DataResponse, error) {
+	var result pluginmodels.DataResponse
 	var err error
 	queryType := tsdbQuery.Queries[0].Model.Get("type").MustString("")
 
@@ -128,16 +128,16 @@ func (e *Executor) TSDBQuery(ctx context.Context, dsInfo *models.DataSource, tsd
 	return result, err
 }
 
-func (e *Executor) getGCEDefaultProject(ctx context.Context, tsdbQuery pluginmodels.TSDBQuery) (pluginmodels.TSDBResponse, error) {
-	result := pluginmodels.TSDBResponse{
-		Results: make(map[string]pluginmodels.TSDBQueryResult),
+func (e *Executor) getGCEDefaultProject(ctx context.Context, tsdbQuery pluginmodels.DataQuery) (pluginmodels.DataResponse, error) {
+	result := pluginmodels.DataResponse{
+		Results: make(map[string]pluginmodels.DataQueryResult),
 	}
 	refID := tsdbQuery.Queries[0].RefID
-	queryResult := pluginmodels.TSDBQueryResult{Meta: simplejson.New(), RefID: refID}
+	queryResult := pluginmodels.DataQueryResult{Meta: simplejson.New(), RefID: refID}
 
 	gceDefaultProject, err := e.getDefaultProject(ctx)
 	if err != nil {
-		return pluginmodels.TSDBResponse{}, fmt.Errorf(
+		return pluginmodels.DataResponse{}, fmt.Errorf(
 			"failed to retrieve default project from GCE metadata server, error: %w", err)
 	}
 
@@ -147,15 +147,15 @@ func (e *Executor) getGCEDefaultProject(ctx context.Context, tsdbQuery pluginmod
 	return result, nil
 }
 
-func (e *Executor) executeTimeSeriesQuery(ctx context.Context, tsdbQuery pluginmodels.TSDBQuery) (
-	pluginmodels.TSDBResponse, error) {
-	result := pluginmodels.TSDBResponse{
-		Results: make(map[string]pluginmodels.TSDBQueryResult),
+func (e *Executor) executeTimeSeriesQuery(ctx context.Context, tsdbQuery pluginmodels.DataQuery) (
+	pluginmodels.DataResponse, error) {
+	result := pluginmodels.DataResponse{
+		Results: make(map[string]pluginmodels.DataQueryResult),
 	}
 
 	queryExecutors, err := e.buildQueryExecutors(tsdbQuery)
 	if err != nil {
-		return pluginmodels.TSDBResponse{}, err
+		return pluginmodels.DataResponse{}, err
 	}
 
 	unit := e.resolvePanelUnitFromQueries(queryExecutors)
@@ -163,9 +163,9 @@ func (e *Executor) executeTimeSeriesQuery(ctx context.Context, tsdbQuery pluginm
 	for _, queryExecutor := range queryExecutors {
 		queryRes, resp, executedQueryString, err := queryExecutor.run(ctx, tsdbQuery, e)
 		if err != nil {
-			return pluginmodels.TSDBResponse{}, err
+			return pluginmodels.DataResponse{}, err
 		}
-		err = queryExecutor.parseResponse(queryRes, resp, executedQueryString)
+		err = queryExecutor.parseResponse(&queryRes, resp, executedQueryString)
 		if err != nil {
 			queryRes.Error = err
 		}
@@ -208,7 +208,7 @@ func (e *Executor) resolvePanelUnitFromQueries(executors []cloudMonitoringQueryE
 	return ""
 }
 
-func (e *Executor) buildQueryExecutors(tsdbQuery pluginmodels.TSDBQuery) ([]cloudMonitoringQueryExecutor, error) {
+func (e *Executor) buildQueryExecutors(tsdbQuery pluginmodels.DataQuery) ([]cloudMonitoringQueryExecutor, error) {
 	cloudMonitoringQueryExecutors := []cloudMonitoringQueryExecutor{}
 
 	startTime, err := tsdbQuery.TimeRange.ParseFrom()
@@ -224,9 +224,12 @@ func (e *Executor) buildQueryExecutors(tsdbQuery pluginmodels.TSDBQuery) ([]clou
 	durationSeconds := int(endTime.Sub(startTime).Seconds())
 
 	for _, query := range tsdbQuery.Queries {
-		migrateLegacyQueryModel(query)
+		migrateLegacyQueryModel(&query)
 		q := grafanaQuery{}
-		model, _ := query.Model.MarshalJSON()
+		model, err := query.Model.MarshalJSON()
+		if err != nil {
+			return nil, err
+		}
 		if err := json.Unmarshal(model, &q); err != nil {
 			return nil, fmt.Errorf("could not unmarshal CloudMonitoringQuery json: %w", err)
 		}
@@ -240,7 +243,6 @@ func (e *Executor) buildQueryExecutors(tsdbQuery pluginmodels.TSDBQuery) ([]clou
 			RefID:    query.RefID,
 			GroupBys: []string{},
 		}
-
 		switch q.QueryType {
 		case metricQueryType:
 			if q.MetricQuery.EditorMode == mqlEditorMode {
@@ -273,6 +275,8 @@ func (e *Executor) buildQueryExecutors(tsdbQuery pluginmodels.TSDBQuery) ([]clou
 			params.Add("filter", buildSLOFilterExpression(q.SloQuery))
 			setSloAggParams(&params, &q.SloQuery, durationSeconds, query.IntervalMS)
 			queryInterface = cmtsf
+		default:
+			panic(fmt.Sprintf("Unrecognized query type %q", q.QueryType))
 		}
 
 		target = params.Encode()
@@ -290,7 +294,7 @@ func (e *Executor) buildQueryExecutors(tsdbQuery pluginmodels.TSDBQuery) ([]clou
 	return cloudMonitoringQueryExecutors, nil
 }
 
-func migrateLegacyQueryModel(query pluginmodels.TSDBSubQuery) {
+func migrateLegacyQueryModel(query *pluginmodels.DataSubQuery) {
 	mq := query.Model.Get("metricQuery").MustMap()
 	if mq == nil {
 		migratedModel := simplejson.NewFromAny(map[string]interface{}{
@@ -424,7 +428,8 @@ func containsLabel(labels []string, newLabel string) bool {
 	return false
 }
 
-func formatLegendKeys(metricType string, defaultMetricName string, labels map[string]string, additionalLabels map[string]string, query *cloudMonitoringTimeSeriesFilter) string {
+func formatLegendKeys(metricType string, defaultMetricName string, labels map[string]string,
+	additionalLabels map[string]string, query *cloudMonitoringTimeSeriesFilter) string {
 	if query.AliasBy == "" {
 		return defaultMetricName
 	}
