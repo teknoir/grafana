@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/grafana/grafana/pkg/infra/log"
+
 	"github.com/grafana/grafana/pkg/models"
 	"github.com/grafana/grafana/pkg/tsdb"
 	es "github.com/grafana/grafana/pkg/tsdb/elasticsearch/client"
@@ -13,6 +15,7 @@ import (
 type ElasticsearchExecutor struct{}
 
 var (
+	logger             log.Logger
 	intervalCalculator tsdb.IntervalCalculator
 )
 
@@ -22,6 +25,7 @@ func NewElasticsearchExecutor(dsInfo *models.DataSource) (tsdb.TsdbQueryEndpoint
 }
 
 func init() {
+	logger = log.New("tsdb.elasticsearch")
 	intervalCalculator = tsdb.NewIntervalCalculator(nil)
 	tsdb.RegisterTsdbQueryEndpoint("elasticsearch", NewElasticsearchExecutor)
 }
@@ -41,6 +45,21 @@ func (e *ElasticsearchExecutor) Query(ctx context.Context, dsInfo *models.DataSo
 		client.EnableDebug()
 	}
 
-	query := newTimeSeriesQuery(client, tsdbQuery, intervalCalculator)
+	var queryType string
+	var query queryEndpoint
+
+	if qt, ok := tsdbQuery.Queries[0].Model.CheckGet("queryType"); ok {
+		queryType = qt.MustString("timeseries")
+	}
+
+	switch queryType {
+	case "fields":
+		query = newFieldsQuery(client, tsdbQuery)
+	case "timeseries":
+		fallthrough
+	default:
+		query = newTimeSeriesQuery(client, tsdbQuery, intervalCalculator)
+	}
+
 	return query.execute()
 }

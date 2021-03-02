@@ -57,7 +57,7 @@ func (rp *responseParser) getTimeSeries() (*tsdb.Response, error) {
 		}
 
 		if res.Error != nil {
-			result.Results[target.RefID] = getErrorFromElasticResponse(res)
+			result.Results[target.RefID] = getErrorFromElasticResponse(res.Error)
 			result.Results[target.RefID].Meta = debugInfo
 			continue
 		}
@@ -564,9 +564,9 @@ func findAgg(target *Query, aggID string) (*BucketAgg, error) {
 	return nil, errors.New("can't found aggDef, aggID:" + aggID)
 }
 
-func getErrorFromElasticResponse(response *es.SearchResponse) *tsdb.QueryResult {
+func getErrorFromElasticResponse(err map[string]interface{}) *tsdb.QueryResult {
 	result := tsdb.NewQueryResult()
-	json := simplejson.NewFromAny(response.Error)
+	json := simplejson.NewFromAny(err)
 	reason := json.Get("reason").MustString()
 	rootCauseReason := json.Get("root_cause").GetIndex(0).Get("reason").MustString()
 
