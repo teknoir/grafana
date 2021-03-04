@@ -4,6 +4,7 @@ import { NavIndex } from '@grafana/data';
 
 import { LocationState } from './location';
 import { AlertDefinitionState, AlertRulesState, NotificationChannelState } from './alerting';
+import { UnifiedAlertingState } from '../features/alerting/unified/state/reducers';
 import { TeamsState, TeamState } from './teams';
 import { FolderState } from './folders';
 import { DashboardState } from './dashboard';
@@ -46,6 +47,7 @@ export interface StoreState {
   importDashboard: ImportDashboardState;
   notificationChannel: NotificationChannelState;
   alertDefinition: AlertDefinitionState;
+  unifiedAlerting: UnifiedAlertingState;
 }
 
 /*
