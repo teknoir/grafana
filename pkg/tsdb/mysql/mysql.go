@@ -60,7 +60,7 @@ func newMysqlQueryEndpoint(datasource *models.DataSource) (tsdb.TsdbQueryEndpoin
 	if setting.Env == setting.Dev {
 		logger.Debug("getEngine", "connection", cnnstr)
 	}
-
+	fmt.Println("<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<< mysql.go ")
 	config := sqleng.SqlQueryEndpointConfiguration{
 		DriverName:        "mysql",
 		ConnectionString:  cnnstr,
@@ -82,7 +82,7 @@ type mysqlQueryResultTransformer struct {
 
 func (t *mysqlQueryResultTransformer) TransformQueryResult(columnTypes []*sql.ColumnType, rows *core.Rows) (tsdb.RowValues, error) {
 	values := make([]interface{}, len(columnTypes))
-
+	fmt.Println("<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<< mysql.go TransformQueryResult")
 	for i := range values {
 		scanType := columnTypes[i].ScanType()
 		values[i] = reflect.New(scanType).Interface()

@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/grafana/grafana-plugin-sdk-go/data"
 	"github.com/grafana/grafana/pkg/setting"
 
 	"github.com/grafana/grafana/pkg/infra/log"
@@ -132,7 +133,7 @@ func (e *sqlQueryEndpoint) Query(ctx context.Context, dsInfo *models.DataSource,
 	result := &tsdb.Response{
 		Results: make(map[string]*tsdb.QueryResult),
 	}
-
+	fmt.Println("<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<< sql_engine.go Query", len(tsdbQuery.Queries))
 	var wg sync.WaitGroup
 
 	for _, query := range tsdbQuery.Queries {
@@ -169,6 +170,8 @@ func (e *sqlQueryEndpoint) Query(ctx context.Context, dsInfo *models.DataSource,
 			db := session.DB()
 
 			rows, err := db.Query(rawSQL)
+			fmt.Printf("<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<< sql_engine.go Query %v+", rows)
+
 			if err != nil {
 				queryResult.Error = e.queryResultTransformer.TransformQueryError(err)
 				return
@@ -180,7 +183,7 @@ func (e *sqlQueryEndpoint) Query(ctx context.Context, dsInfo *models.DataSource,
 			}()
 
 			format := query.Model.Get("format").MustString("time_series")
-
+			fmt.Println("<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<< sql_engine.go")
 			switch format {
 			case "time_series":
 				err := e.transformToTimeSeries(query, rows, queryResult, tsdbQuery)
@@ -221,7 +224,7 @@ var Interpolate = func(query *tsdb.Query, timeRange *tsdb.TimeRange, sql string)
 func (e *sqlQueryEndpoint) transformToTable(query *tsdb.Query, rows *core.Rows, result *tsdb.QueryResult, tsdbQuery *tsdb.TsdbQuery) error {
 	columnNames, err := rows.Columns()
 	columnCount := len(columnNames)
-
+	fmt.Println("<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<< sql_engine.go TransformToTable")
 	if err != nil {
 		return err
 	}
@@ -301,7 +304,7 @@ func newProcessCfg(query *tsdb.Query, tsdbQuery *tsdb.TsdbQuery, rows *core.Rows
 		metricPrefix:       false,
 		fillMissing:        fillMissing,
 		seriesByQueryOrder: list.New(),
-		pointsBySeries:     make(map[string]*tsdb.TimeSeries),
+		pointsBySeries:     make(map[string]*data.Frame),
 		tsdbQuery:          tsdbQuery,
 	}
 	return cfg, nil
@@ -369,19 +372,23 @@ func (e *sqlQueryEndpoint) transformToTimeSeries(query *tsdb.Query, rows *core.R
 
 	for elem := cfg.seriesByQueryOrder.Front(); elem != nil; elem = elem.Next() {
 		key := elem.Value.(string)
-		result.Series = append(result.Series, cfg.pointsBySeries[key])
+		frames, _ := result.Dataframes.Decoded()
+		frames = append(frames, cfg.pointsBySeries[key])
+		result.Dataframes = tsdb.NewDecodedDataFrames(frames)
 		if !cfg.fillMissing {
 			continue
 		}
 
-		series := cfg.pointsBySeries[key]
+		dataframe := cfg.pointsBySeries[key]
 		// fill in values from last fetched value till interval end
-		intervalStart := series.Points[len(series.Points)-1][1].Float64
+
+		intervalStart, _ := dataframe.FloatAt(1, dataframe.Rows()-1)
 		intervalEnd := float64(tsdbQuery.TimeRange.MustGetTo().UnixNano() / 1e6)
 
 		if cfg.fillPrevious {
-			if len(series.Points) > 0 {
-				cfg.fillValue = series.Points[len(series.Points)-1][0]
+			if dataframe.Rows() > 0 {
+				fillValue, _ := dataframe.FloatAt(0, dataframe.Rows()-1)
+				cfg.fillValue = null.FloatFrom(fillValue)
 			} else {
 				cfg.fillValue.Valid = false
 			}
@@ -390,11 +397,10 @@ func (e *sqlQueryEndpoint) transformToTimeSeries(query *tsdb.Query, rows *core.R
 		// align interval start
 		intervalStart = math.Floor(intervalStart/cfg.fillInterval) * cfg.fillInterval
 		for i := intervalStart + cfg.fillInterval; i < intervalEnd; i += cfg.fillInterval {
-			series.Points = append(series.Points, tsdb.TimePoint{cfg.fillValue, null.FloatFrom(i)})
+			dataframe.AppendRow(null.FloatFrom(i), cfg.fillValue)
 			cfg.rowCount++
 		}
 	}
-
 	result.Meta.Set("rowCount", cfg.rowCount)
 	return nil
 }
@@ -409,12 +415,19 @@ type processCfg struct {
 	metricPrefix       bool
 	metricPrefixValue  string
 	fillMissing        bool
-	pointsBySeries     map[string]*tsdb.TimeSeries
+	pointsBySeries     map[string]*data.Frame
 	seriesByQueryOrder *list.List
 	fillValue          null.Float
 	tsdbQuery          *tsdb.TsdbQuery
 	fillInterval       float64
 	fillPrevious       bool
+}
+
+func setDisplayNameAsFieldName(f *data.Field) {
+	if f.Config == nil {
+		f.Config = &data.FieldConfig{}
+	}
+	f.Config.DisplayNameFromDS = f.Name
 }
 
 func (e *sqlQueryEndpoint) processRow(cfg *processCfg) error {
@@ -475,10 +488,13 @@ func (e *sqlQueryEndpoint) processRow(cfg *processCfg) error {
 			metric = cfg.metricPrefixValue + " " + col
 		}
 
-		series, exist := cfg.pointsBySeries[metric]
+		dataframe, exist := cfg.pointsBySeries[metric]
 		if !exist {
-			series = &tsdb.TimeSeries{Name: metric}
-			cfg.pointsBySeries[metric] = series
+			dataframe = data.NewFrameOfFieldTypes("", len(values), data.FieldTypeTime, data.FieldTypeFloat64)
+			dataField := dataframe.Fields[1]
+			dataField.Name = metric
+			setDisplayNameAsFieldName(dataField)
+			cfg.pointsBySeries[metric] = dataframe
 			cfg.seriesByQueryOrder.PushBack(metric)
 		}
 
@@ -487,12 +503,14 @@ func (e *sqlQueryEndpoint) processRow(cfg *processCfg) error {
 			if !exist {
 				intervalStart = float64(cfg.tsdbQuery.TimeRange.MustGetFrom().UnixNano() / 1e6)
 			} else {
-				intervalStart = series.Points[len(series.Points)-1][1].Float64 + cfg.fillInterval
+				intervalStart, _ = dataframe.FloatAt(1, dataframe.Rows()-1)
+				intervalStart += cfg.fillInterval
 			}
 
 			if cfg.fillPrevious {
-				if len(series.Points) > 0 {
-					cfg.fillValue = series.Points[len(series.Points)-1][0]
+				if dataframe.Rows() > 0 {
+					fillValue, _ := dataframe.FloatAt(0, dataframe.Rows()-1)
+					cfg.fillValue = null.FloatFrom(fillValue)
 				} else {
 					cfg.fillValue.Valid = false
 				}
@@ -502,12 +520,12 @@ func (e *sqlQueryEndpoint) processRow(cfg *processCfg) error {
 			intervalStart = math.Floor(intervalStart/cfg.fillInterval) * cfg.fillInterval
 
 			for i := intervalStart; i < timestamp; i += cfg.fillInterval {
-				series.Points = append(series.Points, tsdb.TimePoint{cfg.fillValue, null.FloatFrom(i)})
+				dataframe.AppendRow(cfg.fillValue, null.FloatFrom(i))
 				cfg.rowCount++
 			}
 		}
 
-		series.Points = append(series.Points, tsdb.TimePoint{value, null.FloatFrom(timestamp)})
+		dataframe.AppendRow(value, null.FloatFrom(timestamp))
 
 		if setting.Env == setting.Dev {
 			e.log.Debug("Rows", "metric", metric, "time", timestamp, "value", value)
