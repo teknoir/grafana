@@ -490,7 +490,7 @@ func (e *sqlQueryEndpoint) processRow(cfg *processCfg) error {
 
 		dataframe, exist := cfg.pointsBySeries[metric]
 		if !exist {
-			dataframe = data.NewFrameOfFieldTypes("", len(values), data.FieldTypeTime, data.FieldTypeFloat64)
+			dataframe = data.NewFrameOfFieldTypes("", len(values), data.FieldTypeNullableFloat64, data.FieldTypeFloat64)
 			dataField := dataframe.Fields[1]
 			dataField.Name = metric
 			setDisplayNameAsFieldName(dataField)
@@ -520,12 +520,13 @@ func (e *sqlQueryEndpoint) processRow(cfg *processCfg) error {
 			intervalStart = math.Floor(intervalStart/cfg.fillInterval) * cfg.fillInterval
 
 			for i := intervalStart; i < timestamp; i += cfg.fillInterval {
-				dataframe.AppendRow(cfg.fillValue, null.FloatFrom(i))
+				// point := tsdb.TimePoint{cfg.fillValue, null.FloatFrom(i)}
+				dataframe.AppendRow(cfg.fillValue, i)
 				cfg.rowCount++
 			}
 		}
 
-		dataframe.AppendRow(value, null.FloatFrom(timestamp))
+		dataframe.AppendRow(value, timestamp)
 
 		if setting.Env == setting.Dev {
 			e.log.Debug("Rows", "metric", metric, "time", timestamp, "value", value)
