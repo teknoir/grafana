@@ -1,6 +1,9 @@
 package load
 
 import (
+	"fmt"
+	"path/filepath"
+
 	"cuelang.org/go/cue"
 	"cuelang.org/go/cue/load"
 	"github.com/grafana/grafana/pkg/schema"
@@ -21,6 +24,8 @@ type BaseLoadPaths struct {
 	// expected to exist at github.com/grafana/grafana/cue.
 	BaseCueFS string
 
+	packageName string
+
 	// DistPluginCueFS should point to some fs path (TBD) under which all core
 	// plugins live.
 	DistPluginCueFS string
@@ -33,9 +38,29 @@ type BaseLoadPaths struct {
 	InstanceCueFS string
 }
 
-// BuildFamily read from cue file and build schema.Family go object
-func BuildFamily(famval cue.Value) (*schema.Family, error) {
-	fam := &schema.Family{}
+var buildFamilyFunc = BuildDashboardFamily
+
+// BuildDashboardFamily read from cue file and build schema.Family go object
+func BuildDashboardFamily(fam *schema.Family, famval cue.Value) (*schema.Family, error) {
+	fmt.Println("<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<< 1")
+	majorVersionArray := famval.Lookup("seqs")
+	if !majorVersionArray.Exists() {
+		return fam, fmt.Errorf("seqs field has to exist in cue definition")
+	}
+
+	fmt.Printf("<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<< %v+", majorVersionArray)
+	majorVerstionIte, err := majorVersionArray.Fields(cue.Definitions(true))
+	if err != nil {
+		return fam, err
+	}
+	fmt.Println("<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<< 3")
+	if majorVerstionIte == nil {
+		return fam, fmt.Errorf("seqs has to contain at least one element")
+	}
+	for majorVerstionIte != nil && majorVerstionIte.Next() {
+
+	}
+	fmt.Println("<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<< 4")
 	return fam, nil
 }
 
@@ -49,7 +74,14 @@ func BaseDashboard(p BaseLoadPaths) (*schema.Family, error) {
 	// be the default `cue` behavior for loading packages in ancestor dirs, all files
 	// of the same package in a dir, etc. We could minimize the cost by keeping our
 	// on-disk filesystem structures simple.
-	SchemaInstances := load.Instances([]string{p.BaseCueFS + "/cue/data"}, &load.Config{Package: "grafanaschema"})
+	testdataDir := filepath.Join(p.BaseCueFS, "data")
+	dirCfg := &load.Config{
+		Dir:     testdataDir,
+		Package: p.packageName,
+		Tools:   true,
+	}
+
+	SchemaInstances := load.Instances([]string{"."}, dirCfg)
 	// Select the dashboard schema Value from the instance path at which we have
 	// defined it to live.
 	// TODO ugh, we need to fully define the schema family pattern to pull out the current dashboard
@@ -58,8 +90,9 @@ func BaseDashboard(p BaseLoadPaths) (*schema.Family, error) {
 	insts := cue.Build(SchemaInstances)
 	for _, l := range insts {
 		famval := l.Lookup("dashboardFamily")
+		fmt.Printf("<<<<<<<<<<<<<<<<<<<<<<<< %v+", famval)
 		if famval.Exists() == true {
-			fam, err = BuildFamily(famval)
+			fam, err = buildFamilyFunc(fam, famval)
 			return fam, err
 		}
 	}
