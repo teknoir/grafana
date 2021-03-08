@@ -12,7 +12,7 @@ import (
 
 	"github.com/grafana/grafana/pkg/infra/log"
 	"github.com/grafana/grafana/pkg/models"
-	pluginmodels "github.com/grafana/grafana/pkg/plugins/models"
+	"github.com/grafana/grafana/pkg/plugins"
 	"github.com/grafana/grafana/pkg/tsdb/sqleng"
 	"xorm.io/core"
 )
@@ -37,7 +37,7 @@ func (s *PostgresService) Init() error {
 	return nil
 }
 
-func (s *PostgresService) NewExecutor(datasource *models.DataSource) (pluginmodels.DataPlugin, error) {
+func (s *PostgresService) NewExecutor(datasource *models.DataSource) (plugins.DataPlugin, error) {
 	s.logger.Debug("Creating Postgres query endpoint")
 
 	cnnstr, err := s.generateConnectionString(datasource)
@@ -49,7 +49,7 @@ func (s *PostgresService) NewExecutor(datasource *models.DataSource) (pluginmode
 		s.logger.Debug("getEngine", "connection", cnnstr)
 	}
 
-	config := sqleng.SqlQueryEndpointConfiguration{
+	config := sqleng.DataPluginConfiguration{
 		DriverName:        "postgres",
 		ConnectionString:  cnnstr,
 		Datasource:        datasource,
@@ -62,7 +62,7 @@ func (s *PostgresService) NewExecutor(datasource *models.DataSource) (pluginmode
 
 	timescaledb := datasource.JsonData.Get("timescaledb").MustBool(false)
 
-	endpoint, err := sqleng.NewSqlQueryEndpoint(&config, &queryResultTransformer, newPostgresMacroEngine(timescaledb),
+	plugin, err := sqleng.NewDataPlugin(config, &queryResultTransformer, newPostgresMacroEngine(timescaledb),
 		s.logger)
 	if err != nil {
 		s.logger.Error("Failed connecting to Postgres", "err", err)
@@ -70,7 +70,7 @@ func (s *PostgresService) NewExecutor(datasource *models.DataSource) (pluginmode
 	}
 
 	s.logger.Debug("Successfully connected to Postgres")
-	return endpoint, nil
+	return plugin, nil
 }
 
 // escape single quotes and backslashes in Postgres connection string parameters.
@@ -137,7 +137,7 @@ type postgresQueryResultTransformer struct {
 }
 
 func (t *postgresQueryResultTransformer) TransformQueryResult(columnTypes []*sql.ColumnType, rows *core.Rows) (
-	pluginmodels.DataRowValues, error) {
+	plugins.DataRowValues, error) {
 	values := make([]interface{}, len(columnTypes))
 	valuePtrs := make([]interface{}, len(columnTypes))
 

@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/grafana/grafana/pkg/components/gtime"
-	pluginmodels "github.com/grafana/grafana/pkg/plugins/models"
+	"github.com/grafana/grafana/pkg/plugins"
 	"github.com/grafana/grafana/pkg/tsdb/sqleng"
 )
 
@@ -15,20 +15,20 @@ const rsIdentifier = `([_a-zA-Z0-9]+)`
 const sExpr = `\$` + rsIdentifier + `\(([^\)]*)\)`
 
 type postgresMacroEngine struct {
-	*sqleng.SqlMacroEngineBase
-	timeRange   pluginmodels.DataTimeRange
-	query       pluginmodels.DataSubQuery
+	*sqleng.SQLMacroEngineBase
+	timeRange   plugins.DataTimeRange
+	query       plugins.DataSubQuery
 	timescaledb bool
 }
 
-func newPostgresMacroEngine(timescaledb bool) sqleng.SqlMacroEngine {
+func newPostgresMacroEngine(timescaledb bool) sqleng.SQLMacroEngine {
 	return &postgresMacroEngine{
-		SqlMacroEngineBase: sqleng.NewSqlMacroEngineBase(),
+		SQLMacroEngineBase: sqleng.NewSQLMacroEngineBase(),
 		timescaledb:        timescaledb,
 	}
 }
 
-func (m *postgresMacroEngine) Interpolate(query pluginmodels.DataSubQuery, timeRange pluginmodels.DataTimeRange,
+func (m *postgresMacroEngine) Interpolate(query plugins.DataSubQuery, timeRange plugins.DataTimeRange,
 	sql string) (string, error) {
 	m.timeRange = timeRange
 	m.query = query

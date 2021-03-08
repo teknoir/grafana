@@ -91,7 +91,9 @@ func (dn *DiscordNotifier) Notify(evalContext *evalcontext.EvalContext) error {
 
 	for _, evt := range evalContext.EvalMatches {
 		fields = append(fields, map[string]interface{}{
-			"name":   evt.Metric,
+			// Discord uniquely does not send the alert if the metric field is empty,
+			// which it can be in some cases
+			"name":   notEmpty(evt.Metric),
 			"value":  evt.Value.FullString(),
 			"inline": true,
 		})
@@ -214,4 +216,12 @@ func (dn *DiscordNotifier) embedImage(cmd *models.SendWebhookSync, imagePath str
 	cmd.ContentType = w.FormDataContentType()
 
 	return nil
+}
+
+func notEmpty(metric string) string {
+	if metric == "" {
+		return "<NO_METRIC_NAME>"
+	}
+
+	return metric
 }

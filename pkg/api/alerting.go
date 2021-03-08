@@ -10,7 +10,6 @@ import (
 	"github.com/grafana/grafana/pkg/bus"
 	"github.com/grafana/grafana/pkg/models"
 	"github.com/grafana/grafana/pkg/services/alerting"
-	alertingerrors "github.com/grafana/grafana/pkg/services/alerting/errors"
 	"github.com/grafana/grafana/pkg/services/guardian"
 	"github.com/grafana/grafana/pkg/services/search"
 	"github.com/grafana/grafana/pkg/util"
@@ -136,7 +135,7 @@ func (hs *HTTPServer) AlertTest(c *models.ReqContext, dto dtos.AlertTestCommand)
 
 	res, err := hs.AlertEngine.AlertTest(c.OrgId, dto.Dashboard, dto.PanelId, c.SignedInUser)
 	if err != nil {
-		var validationErr alertingerrors.ValidationError
+		var validationErr alerting.ValidationError
 		if errors.As(err, &validationErr) {
 			return response.Error(422, validationErr.Error(), nil)
 		}

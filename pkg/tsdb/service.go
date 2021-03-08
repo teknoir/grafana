@@ -5,8 +5,8 @@ import (
 	"fmt"
 
 	"github.com/grafana/grafana/pkg/models"
+	"github.com/grafana/grafana/pkg/plugins"
 	"github.com/grafana/grafana/pkg/plugins/manager"
-	pluginmodels "github.com/grafana/grafana/pkg/plugins/models"
 	"github.com/grafana/grafana/pkg/registry"
 	"github.com/grafana/grafana/pkg/setting"
 	"github.com/grafana/grafana/pkg/tsdb/azuremonitor"
@@ -15,17 +15,19 @@ import (
 	"github.com/grafana/grafana/pkg/tsdb/elasticsearch"
 	"github.com/grafana/grafana/pkg/tsdb/graphite"
 	"github.com/grafana/grafana/pkg/tsdb/influxdb"
+	"github.com/grafana/grafana/pkg/tsdb/loki"
 	"github.com/grafana/grafana/pkg/tsdb/mssql"
 	"github.com/grafana/grafana/pkg/tsdb/mysql"
 	"github.com/grafana/grafana/pkg/tsdb/opentsdb"
 	"github.com/grafana/grafana/pkg/tsdb/postgres"
 	"github.com/grafana/grafana/pkg/tsdb/prometheus"
+	"github.com/grafana/grafana/pkg/tsdb/tempo"
 )
 
 // NewService returns a new Service.
 func NewService() Service {
 	return Service{
-		registry: map[string]func(*models.DataSource) (pluginmodels.DataPlugin, error){},
+		registry: map[string]func(*models.DataSource) (plugins.DataPlugin, error){},
 	}
 }
 
@@ -44,9 +46,9 @@ type Service struct {
 	PostgresService        *postgres.PostgresService     `inject:""`
 	CloudMonitoringService *cloudmonitoring.Service      `inject:""`
 	AzureMonitorService    *azuremonitor.Service         `inject:""`
-	PluginManager          *plugins.PluginManager        `inject:""`
+	PluginManager          *manager.PluginManager        `inject:""`
 
-	registry map[string]func(*models.DataSource) (pluginmodels.DataPlugin, error)
+	registry map[string]func(*models.DataSource) (plugins.DataPlugin, error)
 }
 
 // Init initialises the service.
@@ -62,25 +64,27 @@ func (s *Service) Init() error {
 	s.registry["cloudwatch"] = s.CloudWatchService.NewExecutor
 	s.registry["stackdriver"] = s.CloudMonitoringService.NewExecutor
 	s.registry["grafana-azure-monitor-datasource"] = s.AzureMonitorService.NewExecutor
+	s.registry["loki"] = loki.NewExecutor
+	s.registry["tempo"] = tempo.NewExecutor
 	return nil
 }
 
-func (s *Service) HandleRequest(ctx context.Context, ds *models.DataSource, query pluginmodels.DataQuery) (
-	pluginmodels.DataResponse, error) {
+func (s *Service) HandleRequest(ctx context.Context, ds *models.DataSource, query plugins.DataQuery) (
+	plugins.DataResponse, error) {
 	plugin := s.PluginManager.GetDataPlugin(ds.Type)
 	if plugin == nil {
 		factory, exists := s.registry[ds.Type]
 		if !exists {
-			return pluginmodels.DataResponse{}, fmt.Errorf(
+			return plugins.DataResponse{}, fmt.Errorf(
 				"could not find plugin corresponding to data source type: %q", ds.Type)
 		}
 
-		endpoint, err := factory(ds)
+		var err error
+		plugin, err = factory(ds)
 		if err != nil {
-			return pluginmodels.DataResponse{}, fmt.Errorf("could not instantiate endpoint for data plugin %q: %w",
+			return plugins.DataResponse{}, fmt.Errorf("could not instantiate endpoint for data plugin %q: %w",
 				ds.Type, err)
 		}
-		return endpoint.DataQuery(ctx, ds, query)
 	}
 
 	return plugin.DataQuery(ctx, ds, query)
@@ -88,6 +92,6 @@ func (s *Service) HandleRequest(ctx context.Context, ds *models.DataSource, quer
 
 // RegisterQueryHandler registers a query handler factory.
 // This is only exposed for tests!
-func (s *Service) RegisterQueryHandler(name string, factory func(*models.DataSource) (pluginmodels.DataPlugin, error)) {
+func (s *Service) RegisterQueryHandler(name string, factory func(*models.DataSource) (plugins.DataPlugin, error)) {
 	s.registry[name] = factory
 }

@@ -16,8 +16,8 @@ import (
 
 	"github.com/grafana/grafana/pkg/infra/log"
 	"github.com/grafana/grafana/pkg/models"
+	"github.com/grafana/grafana/pkg/plugins"
 	"github.com/grafana/grafana/pkg/plugins/manager"
-	pluginmodels "github.com/grafana/grafana/pkg/plugins/models"
 	"github.com/grafana/grafana/pkg/registry"
 	"github.com/grafana/grafana/pkg/setting"
 	"github.com/grafana/grafana/pkg/util"
@@ -43,7 +43,7 @@ type RenderUser struct {
 
 type RenderingService struct {
 	log             log.Logger
-	pluginInfo      *pluginmodels.RendererPlugin
+	pluginInfo      *plugins.RendererPlugin
 	renderAction    renderFunc
 	domain          string
 	inProgressCount int
@@ -88,7 +88,7 @@ func (rs *RenderingService) Run(ctx context.Context) error {
 
 	if rs.pluginAvailable() {
 		rs.log = rs.log.New("renderer", "plugin")
-		rs.pluginInfo = rs.PluginManager.Renderer
+		rs.pluginInfo = manager.Renderer
 
 		if err := rs.startPlugin(ctx); err != nil {
 			return err
@@ -108,7 +108,7 @@ func (rs *RenderingService) Run(ctx context.Context) error {
 }
 
 func (rs *RenderingService) pluginAvailable() bool {
-	return rs.PluginManager.Renderer != nil
+	return manager.Renderer != nil
 }
 
 func (rs *RenderingService) remoteAvailable() bool {

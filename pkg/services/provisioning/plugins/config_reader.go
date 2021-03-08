@@ -113,7 +113,7 @@ func (cr *configReaderImpl) validatePluginsConfig(apps []*pluginsAsConfig) error
 		}
 
 		for _, app := range apps[i].Apps {
-			if !cr.pm.IsAppInstalled(app.PluginID) {
+			if !manager.IsAppInstalled(app.PluginID) {
 				return fmt.Errorf("app plugin not installed: %s", app.PluginID)
 			}
 		}

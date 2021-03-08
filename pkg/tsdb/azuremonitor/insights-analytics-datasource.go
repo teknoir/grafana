@@ -14,8 +14,8 @@ import (
 	"github.com/grafana/grafana-plugin-sdk-go/data"
 	"github.com/grafana/grafana/pkg/api/pluginproxy"
 	"github.com/grafana/grafana/pkg/models"
+	"github.com/grafana/grafana/pkg/plugins"
 	"github.com/grafana/grafana/pkg/plugins/manager"
-	pluginmodels "github.com/grafana/grafana/pkg/plugins/models"
 	"github.com/grafana/grafana/pkg/setting"
 	"github.com/grafana/grafana/pkg/util/errutil"
 	"github.com/opentracing/opentracing-go"
@@ -41,14 +41,14 @@ type InsightsAnalyticsQuery struct {
 }
 
 func (e *InsightsAnalyticsDatasource) executeTimeSeriesQuery(ctx context.Context,
-	originalQueries []pluginmodels.DataSubQuery, timeRange pluginmodels.DataTimeRange) (pluginmodels.DataResponse, error) {
-	result := pluginmodels.DataResponse{
-		Results: map[string]pluginmodels.DataQueryResult{},
+	originalQueries []plugins.DataSubQuery, timeRange plugins.DataTimeRange) (plugins.DataResponse, error) {
+	result := plugins.DataResponse{
+		Results: map[string]plugins.DataQueryResult{},
 	}
 
 	queries, err := e.buildQueries(originalQueries, timeRange)
 	if err != nil {
-		return pluginmodels.DataResponse{}, err
+		return plugins.DataResponse{}, err
 	}
 
 	for _, query := range queries {
@@ -58,8 +58,8 @@ func (e *InsightsAnalyticsDatasource) executeTimeSeriesQuery(ctx context.Context
 	return result, nil
 }
 
-func (e *InsightsAnalyticsDatasource) buildQueries(queries []pluginmodels.DataSubQuery,
-	timeRange pluginmodels.DataTimeRange) ([]*InsightsAnalyticsQuery, error) {
+func (e *InsightsAnalyticsDatasource) buildQueries(queries []plugins.DataSubQuery,
+	timeRange plugins.DataTimeRange) ([]*InsightsAnalyticsQuery, error) {
 	iaQueries := []*InsightsAnalyticsQuery{}
 
 	for _, query := range queries {
@@ -97,10 +97,10 @@ func (e *InsightsAnalyticsDatasource) buildQueries(queries []pluginmodels.DataSu
 	return iaQueries, nil
 }
 
-func (e *InsightsAnalyticsDatasource) executeQuery(ctx context.Context, query *InsightsAnalyticsQuery) pluginmodels.DataQueryResult {
-	queryResult := pluginmodels.DataQueryResult{RefID: query.RefID}
+func (e *InsightsAnalyticsDatasource) executeQuery(ctx context.Context, query *InsightsAnalyticsQuery) plugins.DataQueryResult {
+	queryResult := plugins.DataQueryResult{RefID: query.RefID}
 
-	queryResultError := func(err error) pluginmodels.DataQueryResult {
+	queryResultError := func(err error) plugins.DataQueryResult {
 		queryResult.Error = err
 		return queryResult
 	}
@@ -181,14 +181,14 @@ func (e *InsightsAnalyticsDatasource) executeQuery(ctx context.Context, query *I
 		}
 	}
 	frames := data.Frames{frame}
-	queryResult.Dataframes = pluginmodels.NewDecodedDataFrames(frames)
+	queryResult.Dataframes = plugins.NewDecodedDataFrames(frames)
 
 	return queryResult
 }
 
 func (e *InsightsAnalyticsDatasource) createRequest(ctx context.Context, dsInfo *models.DataSource) (*http.Request, error) {
 	// find plugin
-	plugin, ok := e.pluginManager.DataSources[dsInfo.Type]
+	plugin, ok := manager.DataSources[dsInfo.Type]
 	if !ok {
 		return nil, errors.New("unable to find datasource plugin Azure Application Insights")
 	}
@@ -221,16 +221,15 @@ func (e *InsightsAnalyticsDatasource) createRequest(ctx context.Context, dsInfo 
 	return req, nil
 }
 
-func (e *InsightsAnalyticsDatasource) getPluginRoute(plugin *pluginmodels.DataSourcePlugin, cloudName string) (
-	*pluginmodels.AppPluginRoute, string, error) {
+func (e *InsightsAnalyticsDatasource) getPluginRoute(plugin *plugins.DataSourcePlugin, cloudName string) (
+	*plugins.AppPluginRoute, string, error) {
 	pluginRouteName := "appinsights"
 
 	if cloudName == "chinaazuremonitor" {
 		pluginRouteName = "chinaappinsights"
 	}
 
-	var pluginRoute *pluginmodels.AppPluginRoute
-
+	var pluginRoute *plugins.AppPluginRoute
 	for _, route := range plugin.Routes {
 		if route.Path == pluginRouteName {
 			pluginRoute = route

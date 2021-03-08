@@ -7,32 +7,16 @@ import (
 	"github.com/grafana/grafana/pkg/bus"
 	"github.com/grafana/grafana/pkg/components/simplejson"
 	"github.com/grafana/grafana/pkg/models"
-	pluginmodels "github.com/grafana/grafana/pkg/plugins/models"
+	"github.com/grafana/grafana/pkg/plugins"
 )
 
-type PluginDashboardInfoDTO struct {
-	PluginId         string `json:"pluginId"`
-	Title            string `json:"title"`
-	Imported         bool   `json:"imported"`
-	ImportedUri      string `json:"importedUri"`
-	ImportedUrl      string `json:"importedUrl"`
-	Slug             string `json:"slug"`
-	DashboardId      int64  `json:"dashboardId"`
-	FolderId         int64  `json:"folderId"`
-	ImportedRevision int64  `json:"importedRevision"`
-	Revision         int64  `json:"revision"`
-	Description      string `json:"description"`
-	Path             string `json:"path"`
-	Removed          bool   `json:"removed"`
-}
-
-func (pm *PluginManager) GetPluginDashboards(orgId int64, pluginId string) ([]*PluginDashboardInfoDTO, error) {
-	plugin, exists := pm.Plugins[pluginId]
+func (pm *PluginManager) GetPluginDashboards(orgId int64, pluginId string) ([]*plugins.PluginDashboardInfoDTO, error) {
+	plugin, exists := Plugins[pluginId]
 	if !exists {
-		return nil, pluginmodels.PluginNotFoundError{pluginId}
+		return nil, plugins.PluginNotFoundError{PluginID: pluginId}
 	}
 
-	result := make([]*PluginDashboardInfoDTO, 0)
+	result := make([]*plugins.PluginDashboardInfoDTO, 0)
 
 	// load current dashboards
 	query := models.GetDashboardsByPluginIdQuery{OrgId: orgId, PluginId: pluginId}
@@ -42,16 +26,16 @@ func (pm *PluginManager) GetPluginDashboards(orgId int64, pluginId string) ([]*P
 
 	existingMatches := make(map[int64]bool)
 	for _, include := range plugin.Includes {
-		if include.Type != pluginmodels.PluginTypeDashboard {
+		if include.Type != plugins.PluginTypeDashboard {
 			continue
 		}
 
-		dashboard, err := LoadPluginDashboard(plugin.Id, include.Path)
+		dashboard, err := pm.LoadPluginDashboard(plugin.Id, include.Path)
 		if err != nil {
 			return nil, err
 		}
 
-		res := &PluginDashboardInfoDTO{}
+		res := &plugins.PluginDashboardInfoDTO{}
 		res.Path = include.Path
 		res.PluginId = plugin.Id
 		res.Title = dashboard.Title
@@ -75,7 +59,7 @@ func (pm *PluginManager) GetPluginDashboards(orgId int64, pluginId string) ([]*P
 	// find deleted dashboards
 	for _, dash := range query.Result {
 		if _, exists := existingMatches[dash.Id]; !exists {
-			result = append(result, &PluginDashboardInfoDTO{
+			result = append(result, &plugins.PluginDashboardInfoDTO{
 				Slug:        dash.Slug,
 				DashboardId: dash.Id,
 				Removed:     true,
@@ -86,10 +70,10 @@ func (pm *PluginManager) GetPluginDashboards(orgId int64, pluginId string) ([]*P
 	return result, nil
 }
 
-func (pm *PluginManager) loadPluginDashboard(pluginId, path string) (*models.Dashboard, error) {
-	plugin, exists := pm.Plugins[pluginId]
+func (pm *PluginManager) LoadPluginDashboard(pluginId, path string) (*models.Dashboard, error) {
+	plugin, exists := Plugins[pluginId]
 	if !exists {
-		return nil, pluginmodels.PluginNotFoundError{pluginId}
+		return nil, plugins.PluginNotFoundError{PluginID: pluginId}
 	}
 
 	dashboardFilePath := filepath.Join(plugin.PluginDir, path)
@@ -104,7 +88,7 @@ func (pm *PluginManager) loadPluginDashboard(pluginId, path string) (*models.Das
 
 	defer func() {
 		if err := reader.Close(); err != nil {
-			pm.log.Warn("Failed to close file", "path", dashboardFilePath, "err", err)
+			plog.Warn("Failed to close file", "path", dashboardFilePath, "err", err)
 		}
 	}()
 

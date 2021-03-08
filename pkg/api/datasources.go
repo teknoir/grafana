@@ -13,7 +13,8 @@ import (
 	"github.com/grafana/grafana/pkg/bus"
 	"github.com/grafana/grafana/pkg/infra/log"
 	"github.com/grafana/grafana/pkg/models"
-	"github.com/grafana/grafana/pkg/plugins/models/adapters"
+	"github.com/grafana/grafana/pkg/plugins/adapters"
+	"github.com/grafana/grafana/pkg/plugins/manager"
 	"github.com/grafana/grafana/pkg/util"
 )
 
@@ -46,7 +47,7 @@ func (hs *HTTPServer) GetDataSources(c *models.ReqContext) response.Response {
 			ReadOnly:  ds.ReadOnly,
 		}
 
-		if plugin, exists := hs.PluginManager.DataSources[ds.Type]; exists {
+		if plugin, exists := manager.DataSources[ds.Type]; exists {
 			dsItem.TypeLogoUrl = plugin.Info.Logos.Small
 			dsItem.TypeName = plugin.Name
 		} else {
@@ -362,7 +363,7 @@ func (hs *HTTPServer) CallDatasourceResource(c *models.ReqContext) {
 	}
 
 	// find plugin
-	plugin, ok := hs.PluginManager.DataSources[ds.Type]
+	plugin, ok := manager.DataSources[ds.Type]
 	if !ok {
 		c.JsonApiErr(500, "Unable to find datasource plugin", err)
 		return

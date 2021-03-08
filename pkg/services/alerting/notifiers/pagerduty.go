@@ -113,6 +113,7 @@ func (pn *PagerdutyNotifier) buildEventPayload(evalContext *evalcontext.EvalCont
 		eventType = "resolve"
 	}
 	customData := simplejson.New()
+	customData.Set("state", evalContext.Rule.State)
 	if pn.MessageInDetails {
 		queries := make(map[string]interface{})
 		for _, evt := range evalContext.EvalMatches {

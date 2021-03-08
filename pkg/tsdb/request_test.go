@@ -6,21 +6,21 @@ import (
 
 	"github.com/grafana/grafana/pkg/models"
 	"github.com/grafana/grafana/pkg/plugins"
-	backendmodels "github.com/grafana/grafana/pkg/plugins/backendplugin/models"
-	pluginmodels "github.com/grafana/grafana/pkg/plugins/models"
+	"github.com/grafana/grafana/pkg/plugins/backendplugin"
+	"github.com/grafana/grafana/pkg/plugins/manager"
 	"github.com/stretchr/testify/require"
 )
 
 func TestHandleRequest(t *testing.T) {
 	t.Run("Should return query result when handling request for query", func(t *testing.T) {
-		req := pluginmodels.DataQuery{
-			Queries: []pluginmodels.DataSubQuery{
+		req := plugins.DataQuery{
+			Queries: []plugins.DataSubQuery{
 				{RefID: "A", DataSource: &models.DataSource{Id: 1, Type: "test"}},
 			},
 		}
 
 		svc, exe := createService()
-		exe.Return("A", pluginmodels.DataTimeSeriesSlice{pluginmodels.DataTimeSeries{Name: "argh"}})
+		exe.Return("A", plugins.DataTimeSeriesSlice{plugins.DataTimeSeries{Name: "argh"}})
 
 		res, err := svc.HandleRequest(context.TODO(), &models.DataSource{Id: 1, Type: "test"}, req)
 		require.NoError(t, err)
@@ -29,16 +29,16 @@ func TestHandleRequest(t *testing.T) {
 	})
 
 	t.Run("Should return query results when handling request for two queries with same data source", func(t *testing.T) {
-		req := pluginmodels.DataQuery{
-			Queries: []pluginmodels.DataSubQuery{
+		req := plugins.DataQuery{
+			Queries: []plugins.DataSubQuery{
 				{RefID: "A", DataSource: &models.DataSource{Id: 1, Type: "test"}},
 				{RefID: "B", DataSource: &models.DataSource{Id: 1, Type: "test"}},
 			},
 		}
 
 		svc, exe := createService()
-		exe.Return("A", pluginmodels.DataTimeSeriesSlice{pluginmodels.DataTimeSeries{Name: "argh"}})
-		exe.Return("B", pluginmodels.DataTimeSeriesSlice{pluginmodels.DataTimeSeries{Name: "barg"}})
+		exe.Return("A", plugins.DataTimeSeriesSlice{plugins.DataTimeSeries{Name: "argh"}})
+		exe.Return("B", plugins.DataTimeSeriesSlice{plugins.DataTimeSeries{Name: "barg"}})
 
 		res, err := svc.HandleRequest(context.TODO(), &models.DataSource{Id: 1, Type: "test"}, req)
 		require.NoError(t, err)
@@ -51,8 +51,8 @@ func TestHandleRequest(t *testing.T) {
 	t.Run("Should return error when handling request for query with unknown type", func(t *testing.T) {
 		svc, _ := createService()
 
-		req := pluginmodels.DataQuery{
-			Queries: []pluginmodels.DataSubQuery{
+		req := plugins.DataQuery{
+			Queries: []plugins.DataSubQuery{
 				{RefID: "A", DataSource: &models.DataSource{Id: 1, Type: "asdasdas"}},
 			},
 		}
@@ -61,16 +61,16 @@ func TestHandleRequest(t *testing.T) {
 	})
 }
 
-type resultsFn func(context pluginmodels.DataQuery) pluginmodels.DataQueryResult
+type resultsFn func(context plugins.DataQuery) plugins.DataQueryResult
 
 type fakeExecutor struct {
-	results   map[string]pluginmodels.DataQueryResult
+	results   map[string]plugins.DataQueryResult
 	resultsFn map[string]resultsFn
 }
 
-func (e *fakeExecutor) DataQuery(ctx context.Context, dsInfo *models.DataSource, context pluginmodels.DataQuery) (
-	pluginmodels.DataResponse, error) {
-	result := pluginmodels.DataResponse{Results: make(map[string]pluginmodels.DataQueryResult)}
+func (e *fakeExecutor) DataQuery(ctx context.Context, dsInfo *models.DataSource, context plugins.DataQuery) (
+	plugins.DataResponse, error) {
+	result := plugins.DataResponse{Results: make(map[string]plugins.DataQueryResult)}
 	for _, query := range context.Queries {
 		if results, has := e.results[query.RefID]; has {
 			result.Results[query.RefID] = results
@@ -83,9 +83,9 @@ func (e *fakeExecutor) DataQuery(ctx context.Context, dsInfo *models.DataSource,
 	return result, nil
 }
 
-func (e *fakeExecutor) Return(refId string, series pluginmodels.DataTimeSeriesSlice) {
-	e.results[refId] = pluginmodels.DataQueryResult{
-		RefID: refId, Series: series,
+func (e *fakeExecutor) Return(refID string, series plugins.DataTimeSeriesSlice) {
+	e.results[refID] = plugins.DataQueryResult{
+		RefID: refID, Series: series,
 	}
 }
 
@@ -94,7 +94,7 @@ func (e *fakeExecutor) HandleQuery(refId string, fn resultsFn) {
 }
 
 type fakeBackendPM struct {
-	backendmodels.Manager
+	backendplugin.Manager
 }
 
 func (pm fakeBackendPM) GetDataPlugin(string) interface{} {
@@ -103,14 +103,14 @@ func (pm fakeBackendPM) GetDataPlugin(string) interface{} {
 
 func createService() (Service, *fakeExecutor) {
 	s := NewService()
-	s.PluginManager = &plugins.PluginManager{
+	s.PluginManager = &manager.PluginManager{
 		BackendPluginManager: fakeBackendPM{},
 	}
 	e := &fakeExecutor{
-		results:   make(map[string]pluginmodels.DataQueryResult),
+		results:   make(map[string]plugins.DataQueryResult),
 		resultsFn: make(map[string]resultsFn),
 	}
-	s.registry["test"] = func(*models.DataSource) (pluginmodels.DataPlugin, error) {
+	s.registry["test"] = func(*models.DataSource) (plugins.DataPlugin, error) {
 		return e, nil
 	}
 

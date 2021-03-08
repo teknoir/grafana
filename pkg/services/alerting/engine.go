@@ -56,7 +56,7 @@ func (e *AlertEngine) Init() error {
 	e.execQueue = make(chan *job.Job, 1000)
 	e.scheduler = newScheduler()
 	e.evalHandler = NewEvalHandler(e.DataService)
-	e.ruleReader = newRuleReader(e.TSDBService)
+	e.ruleReader = newRuleReader()
 	e.log = log.New("alerting.engine")
 	e.resultHandler = newResultHandler(e.RenderService)
 	return nil

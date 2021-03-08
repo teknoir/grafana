@@ -1,3 +1,4 @@
+// Package manager contains plugin manager logic.
 package manager
 
 import (
@@ -13,21 +14,31 @@ import (
 	"strings"
 	"time"
 
-	"github.com/grafana/grafana/pkg/bus"
 	"github.com/grafana/grafana/pkg/infra/fs"
 	"github.com/grafana/grafana/pkg/infra/log"
 	"github.com/grafana/grafana/pkg/infra/metrics"
+	"github.com/grafana/grafana/pkg/models"
 	"github.com/grafana/grafana/pkg/plugins"
 	"github.com/grafana/grafana/pkg/plugins/backendplugin"
-	"github.com/grafana/grafana/pkg/plugins/models"
 	"github.com/grafana/grafana/pkg/registry"
-	"github.com/grafana/grafana/pkg/services/sqlstore"
 	"github.com/grafana/grafana/pkg/setting"
 	"github.com/grafana/grafana/pkg/util"
 	"github.com/grafana/grafana/pkg/util/errutil"
 )
 
-type unsignedPluginConditionFunc = func(plugin *models.PluginBase) bool
+var (
+	DataSources  map[string]*plugins.DataSourcePlugin
+	Panels       map[string]*plugins.PanelPlugin
+	StaticRoutes []*plugins.PluginStaticRoute
+	Apps         map[string]*plugins.AppPlugin
+	Plugins      map[string]*plugins.PluginBase
+	PluginTypes  map[string]interface{}
+	Renderer     *plugins.RendererPlugin
+
+	plog log.Logger
+)
+
+type unsignedPluginConditionFunc = func(plugin *plugins.PluginBase) bool
 
 type PluginScanner struct {
 	pluginPath                    string
@@ -36,19 +47,13 @@ type PluginScanner struct {
 	cfg                           *setting.Cfg
 	requireSigned                 bool
 	log                           log.Logger
-	plugins                       map[string]*models.PluginBase
+	plugins                       map[string]*plugins.PluginBase
 	allowUnsignedPluginsCondition unsignedPluginConditionFunc
 }
 
-func init() {
-	registry.RegisterService(&PluginManager{})
-}
-
-// PluginManager manages Grafana plugins.
 type PluginManager struct {
 	BackendPluginManager backendplugin.Manager `inject:""`
 	Cfg                  *setting.Cfg          `inject:""`
-	SQLStore             *sqlstore.SQLStore    `inject:""`
 	log                  log.Logger
 	scanningErrors       []error
 
@@ -57,33 +62,29 @@ type PluginManager struct {
 	AllowUnsignedPluginsCondition unsignedPluginConditionFunc
 	GrafanaLatestVersion          string
 	GrafanaHasUpdate              bool
-	DataSources                   map[string]*models.DataSourcePlugin
-	Panels                        map[string]*models.PanelPlugin
-	StaticRoutes                  []*models.PluginStaticRoute
-	Apps                          map[string]*models.AppPlugin
-	Plugins                       map[string]*models.PluginBase
-	PluginTypes                   map[string]interface{}
-	Renderer                      *models.RendererPlugin
+	pluginScanningErrors          map[string]plugins.PluginError
+}
 
-	pluginScanningErrors map[string]PluginError
+func init() {
+	registry.RegisterService(&PluginManager{})
 }
 
 func (pm *PluginManager) Init() error {
-
 	pm.log = log.New("plugins")
+	plog = log.New("plugins")
 
-	pm.DataSources = map[string]*models.DataSourcePlugin{}
-	pm.StaticRoutes = []*models.PluginStaticRoute{}
-	pm.Panels = map[string]*models.PanelPlugin{}
-	pm.Apps = map[string]*models.AppPlugin{}
-	pm.Plugins = map[string]*models.PluginBase{}
-	pm.PluginTypes = map[string]interface{}{
-		"panel":      models.PanelPlugin{},
-		"datasource": models.DataSourcePlugin{},
-		"app":        models.AppPlugin{},
-		"renderer":   models.RendererPlugin{},
+	DataSources = map[string]*plugins.DataSourcePlugin{}
+	StaticRoutes = []*plugins.PluginStaticRoute{}
+	Panels = map[string]*plugins.PanelPlugin{}
+	Apps = map[string]*plugins.AppPlugin{}
+	Plugins = map[string]*plugins.PluginBase{}
+	PluginTypes = map[string]interface{}{
+		"panel":      plugins.PanelPlugin{},
+		"datasource": plugins.DataSourcePlugin{},
+		"app":        plugins.AppPlugin{},
+		"renderer":   plugins.RendererPlugin{},
 	}
-	pm.pluginScanningErrors = map[string]PluginError{}
+	pm.pluginScanningErrors = map[string]plugins.PluginError{}
 
 	pm.log.Info("Starting plugin search")
 
@@ -128,23 +129,27 @@ func (pm *PluginManager) Init() error {
 		return err
 	}
 
-	for _, panel := range pm.Panels {
-		panel.InitFrontendPlugin()
+	for _, panel := range Panels {
+		staticRoutes := panel.InitFrontendPlugin()
+		StaticRoutes = append(StaticRoutes, staticRoutes...)
 	}
 
-	for _, ds := range pm.DataSources {
-		ds.InitFrontendPlugin()
+	for _, ds := range DataSources {
+		staticRoutes := ds.InitFrontendPlugin()
+		StaticRoutes = append(StaticRoutes, staticRoutes...)
 	}
 
-	for _, app := range pm.Apps {
-		app.InitApp()
+	for _, app := range Apps {
+		staticRoutes := app.InitApp(Panels, DataSources)
+		StaticRoutes = append(StaticRoutes, staticRoutes...)
 	}
 
-	if pm.Renderer != nil {
-		pm.Renderer.InitFrontendPlugin()
+	if Renderer != nil {
+		staticRoutes := Renderer.InitFrontendPlugin()
+		StaticRoutes = append(StaticRoutes, staticRoutes...)
 	}
 
-	for _, p := range pm.Plugins {
+	for _, p := range Plugins {
 		if p.IsCorePlugin {
 			p.Signature = plugins.PluginSignatureInternal
 		} else {
@@ -152,14 +157,10 @@ func (pm *PluginManager) Init() error {
 		}
 	}
 
-	bus.AddHandler("plugins", pm.ImportDashboard)
-	bus.AddEventListener(pm.handlePluginStateChanged)
-
 	return nil
 }
 
 func (pm *PluginManager) Run(ctx context.Context) error {
-	pm.updateAppDashboards()
 	pm.checkForUpdates()
 
 	ticker := time.NewTicker(time.Minute * 10)
@@ -175,12 +176,6 @@ func (pm *PluginManager) Run(ctx context.Context) error {
 	}
 
 	return ctx.Err()
-}
-
-// GetTSDBPlugin gets a TSDBPlugin with a certain name. If none is found, nil is returned.
-func (pm *PluginManager) GetTSDBPlugin(pluginID string) models.TSDBPlugin {
-	return pm.DataSources[pluginID]
-	// TODO: Look among other plugins
 }
 
 // scanPluginPaths scans configured plugin paths.
@@ -207,7 +202,7 @@ func (pm *PluginManager) scan(pluginDir string, requireSigned bool) error {
 		cfg:                           pm.Cfg,
 		requireSigned:                 requireSigned,
 		log:                           pm.log,
-		plugins:                       map[string]*models.PluginBase{},
+		plugins:                       map[string]*plugins.PluginBase{},
 		allowUnsignedPluginsCondition: pm.AllowUnsignedPluginsCondition,
 	}
 
@@ -257,7 +252,7 @@ func (pm *PluginManager) scan(pluginDir string, requireSigned bool) error {
 
 		pm.log.Debug("Attempting to add plugin", "id", plugin.Id)
 
-		pluginGoType, exists := pm.PluginTypes[plugin.Type]
+		pluginGoType, exists := PluginTypes[plugin.Type]
 		if !exists {
 			return fmt.Errorf("unknown plugin type %q", plugin.Type)
 		}
@@ -294,18 +289,12 @@ func (pm *PluginManager) scan(pluginDir string, requireSigned bool) error {
 
 		jsonParser := json.NewDecoder(reader)
 
-		loader := reflect.New(reflect.TypeOf(pluginGoType)).Interface().(models.PluginLoader)
+		loader := reflect.New(reflect.TypeOf(pluginGoType)).Interface().(plugins.PluginLoader)
 
 		// Load the full plugin, and add it to manager
-		if err := loader.Load(jsonParser, plugin, scanner.backendPluginManager); err != nil {
-			if errors.Is(err, models.DuplicatePluginError{}) {
-				pm.log.Warn("Plugin is duplicate", "error", err)
-				scanner.errors = append(scanner.errors, err)
-				continue
-			}
+		if err := pm.loadPlugin(jsonParser, plugin, scanner, loader); err != nil {
 			return err
 		}
-		pm.log.Debug("Successfully added plugin", "id", plugin.Id)
 	}
 
 	if len(scanner.errors) > 0 {
@@ -316,70 +305,73 @@ func (pm *PluginManager) scan(pluginDir string, requireSigned bool) error {
 	return nil
 }
 
+func (pm *PluginManager) loadPlugin(jsonParser *json.Decoder, pluginBase *plugins.PluginBase,
+	scanner *PluginScanner, loader plugins.PluginLoader) error {
+	plug, err := loader.Load(jsonParser, pluginBase, scanner.backendPluginManager)
+	if err != nil {
+		return err
+	}
+
+	var pb *plugins.PluginBase
+	switch p := plug.(type) {
+	case *plugins.DataSourcePlugin:
+		DataSources[p.Id] = p
+		pb = &p.PluginBase
+	case *plugins.PanelPlugin:
+		Panels[p.Id] = p
+		pb = &p.PluginBase
+	case *plugins.RendererPlugin:
+		Renderer = p
+		pb = &p.PluginBase
+	case *plugins.AppPlugin:
+		Apps[p.Id] = p
+		pb = &p.PluginBase
+	default:
+		panic(fmt.Sprintf("Unrecognized plugin type %T", plug))
+	}
+
+	if p, exists := Plugins[pb.Id]; exists {
+		pm.log.Warn("Plugin is duplicate", "id", pb.Id)
+		scanner.errors = append(scanner.errors, plugins.DuplicatePluginError{Plugin: pb, ExistingPlugin: p})
+		return nil
+	}
+
+	if !strings.HasPrefix(pluginBase.PluginDir, pm.Cfg.StaticRootPath) {
+		pm.log.Info("Registering plugin", "id", pb.Id)
+	}
+
+	if len(pb.Dependencies.Plugins) == 0 {
+		pb.Dependencies.Plugins = []plugins.PluginDependencyItem{}
+	}
+
+	if pb.Dependencies.GrafanaVersion == "" {
+		pb.Dependencies.GrafanaVersion = "*"
+	}
+
+	for _, include := range pb.Includes {
+		if include.Role == "" {
+			include.Role = models.ROLE_VIEWER
+		}
+	}
+
+	// Copy relevant fields from the base
+	pb.PluginDir = pluginBase.PluginDir
+	pb.Signature = pluginBase.Signature
+	pb.SignatureType = pluginBase.SignatureType
+	pb.SignatureOrg = pluginBase.SignatureOrg
+
+	Plugins[pb.Id] = pb
+	pm.log.Debug("Successfully added plugin", "id", pb.Id)
+	return nil
+}
+
 // GetDatasource returns a datasource based on passed pluginID if it exists
 //
 // This function fetches the datasource from the global variable DataSources in this package.
 // Rather then refactor all dependencies on the global variable we can use this as an transition.
-func (pm *PluginManager) GetDatasource(pluginID string) (*models.DataSourcePlugin, bool) {
-	ds, exists := pm.DataSources[pluginID]
+func (pm *PluginManager) GetDatasource(pluginID string) (*plugins.DataSourcePlugin, bool) {
+	ds, exists := DataSources[pluginID]
 	return ds, exists
-}
-
-// ScanningErrors returns plugin scanning errors encountered.
-func (pm *PluginManager) ScanningErrors() []PluginError {
-	scanningErrs := make([]PluginError, 0)
-	for id, e := range pm.pluginScanningErrors {
-		scanningErrs = append(scanningErrs, PluginError{
-			ErrorCode: e.ErrorCode,
-			PluginID:  id,
-		})
-	}
-	return scanningErrs
-}
-
-type EnabledPlugins struct {
-	Panels      []*models.PanelPlugin
-	DataSources map[string]*models.DataSourcePlugin
-	Apps        []*models.AppPlugin
-}
-
-func (pm *PluginManager) GetEnabledPlugins(orgId int64) (*EnabledPlugins, error) {
-	enabledPlugins := EnabledPlugins{
-		Panels:      make([]*models.PanelPlugin, 0),
-		DataSources: make(map[string]*models.DataSourcePlugin),
-		Apps:        make([]*models.AppPlugin, 0),
-	}
-	pluginSettingMap, err := pm.GetPluginSettings(orgId)
-	if err != nil {
-		return nil, err
-	}
-
-	isPluginEnabled := func(pluginId string) bool {
-		_, ok := pluginSettingMap[pluginId]
-		return ok
-	}
-
-	for pluginId, app := range pm.Apps {
-		if b, ok := pluginSettingMap[pluginId]; ok {
-			app.Pinned = b.Pinned
-			enabledPlugins.Apps = append(enabledPlugins.Apps, app)
-		}
-	}
-
-	// add all plugins that are not part of an App.
-	for dsId, ds := range pm.DataSources {
-		if isPluginEnabled(ds.Id) {
-			enabledPlugins.DataSources[dsId] = ds
-		}
-	}
-
-	for _, panel := range pm.Panels {
-		if isPluginEnabled(panel.Id) {
-			enabledPlugins.Panels = append(enabledPlugins.Panels, panel)
-		}
-	}
-
-	return &enabledPlugins, nil
 }
 
 func (s *PluginScanner) walker(currentPath string, f os.FileInfo, err error) error {
@@ -427,7 +419,7 @@ func (s *PluginScanner) loadPlugin(pluginJSONFilePath string) error {
 	}()
 
 	jsonParser := json.NewDecoder(reader)
-	pluginCommon := models.PluginBase{}
+	pluginCommon := plugins.PluginBase{}
 	if err := jsonParser.Decode(&pluginCommon); err != nil {
 		return err
 	}
@@ -462,7 +454,7 @@ func (*PluginScanner) IsBackendOnlyPlugin(pluginType string) bool {
 }
 
 // validateSignature validates a plugin's signature.
-func (s *PluginScanner) validateSignature(plugin *models.PluginBase) *PluginError {
+func (s *PluginScanner) validateSignature(plugin *plugins.PluginBase) *plugins.PluginError {
 	if plugin.Signature == plugins.PluginSignatureValid {
 		s.log.Debug("Plugin has valid signature", "id", plugin.Id)
 		return nil
@@ -498,7 +490,7 @@ func (s *PluginScanner) validateSignature(plugin *models.PluginBase) *PluginErro
 		if allowed := s.allowUnsigned(plugin); !allowed {
 			s.log.Debug("Plugin is unsigned", "id", plugin.Id)
 			s.errors = append(s.errors, fmt.Errorf("plugin %q is unsigned", plugin.Id))
-			return &PluginError{
+			return &plugins.PluginError{
 				ErrorCode: signatureMissing,
 			}
 		}
@@ -508,13 +500,13 @@ func (s *PluginScanner) validateSignature(plugin *models.PluginBase) *PluginErro
 	case plugins.PluginSignatureInvalid:
 		s.log.Debug("Plugin %q has an invalid signature", plugin.Id)
 		s.errors = append(s.errors, fmt.Errorf("plugin %q has an invalid signature", plugin.Id))
-		return &PluginError{
+		return &plugins.PluginError{
 			ErrorCode: signatureInvalid,
 		}
 	case plugins.PluginSignatureModified:
 		s.log.Debug("Plugin %q has a modified signature", plugin.Id)
 		s.errors = append(s.errors, fmt.Errorf("plugin %q's signature has been modified", plugin.Id))
-		return &PluginError{
+		return &plugins.PluginError{
 			ErrorCode: signatureModified,
 		}
 	default:
@@ -522,7 +514,7 @@ func (s *PluginScanner) validateSignature(plugin *models.PluginBase) *PluginErro
 	}
 }
 
-func (s *PluginScanner) allowUnsigned(plugin *models.PluginBase) bool {
+func (s *PluginScanner) allowUnsigned(plugin *plugins.PluginBase) bool {
 	if s.allowUnsignedPluginsCondition != nil {
 		return s.allowUnsignedPluginsCondition(plugin)
 	}
@@ -540,53 +532,22 @@ func (s *PluginScanner) allowUnsigned(plugin *models.PluginBase) bool {
 	return false
 }
 
-func (pm *PluginManager) updateAppDashboards() {
-	pm.log.Debug("Looking for App Dashboard Updates")
-
-	rslt, err := pm.SQLStore.GetPluginSettings(0)
-	if err != nil {
-		pm.log.Error("Failed to get all plugin settings", "error", err)
-		return
+// ScanningErrors returns plugin scanning errors encountered.
+func (pm *PluginManager) ScanningErrors() []plugins.PluginError {
+	scanningErrs := make([]plugins.PluginError, 0)
+	for id, e := range pm.pluginScanningErrors {
+		scanningErrs = append(scanningErrs, plugins.PluginError{
+			ErrorCode: e.ErrorCode,
+			PluginID:  id,
+		})
 	}
-
-	for _, pluginSetting := range rslt {
-		// ignore disabled plugins
-		if !pluginSetting.Enabled {
-			continue
-		}
-
-		if pluginDef, exist := pm.Plugins[pluginSetting.PluginId]; exist {
-			if pluginDef.Info.Version != pluginSetting.PluginVersion {
-				pm.syncPluginDashboards(pluginDef, pluginSetting.OrgId)
-			}
-		}
-	}
-}
-
-// gets plugin filenames that require verification for plugin signing
-func collectPluginFilesWithin(rootDir string) ([]string, error) {
-	var files []string
-
-	err := filepath.Walk(rootDir, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if !info.IsDir() && info.Name() != "MANIFEST.txt" {
-			file, err := filepath.Rel(rootDir, path)
-			if err != nil {
-				return err
-			}
-			files = append(files, filepath.ToSlash(file))
-		}
-		return nil
-	})
-	return files, err
+	return scanningErrs
 }
 
 func (pm *PluginManager) GetPluginMarkdown(pluginId string, name string) ([]byte, error) {
-	plug, exists := pm.Plugins[pluginId]
+	plug, exists := Plugins[pluginId]
 	if !exists {
-		return nil, models.PluginNotFoundError{pluginId}
+		return nil, plugins.PluginNotFoundError{PluginID: pluginId}
 	}
 
 	// nolint:gosec
@@ -617,4 +578,39 @@ func (pm *PluginManager) GetPluginMarkdown(pluginId string, name string) ([]byte
 		return nil, err
 	}
 	return data, nil
+}
+
+// gets plugin filenames that require verification for plugin signing
+func collectPluginFilesWithin(rootDir string) ([]string, error) {
+	var files []string
+	err := filepath.Walk(rootDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if !info.IsDir() && info.Name() != "MANIFEST.txt" {
+			file, err := filepath.Rel(rootDir, path)
+			if err != nil {
+				return err
+			}
+			files = append(files, filepath.ToSlash(file))
+		}
+		return nil
+	})
+	return files, err
+}
+
+// GetDataPlugin gets a DataPlugin with a certain name. If none is found, nil is returned.
+func (pm *PluginManager) GetDataPlugin(pluginID string) plugins.DataPlugin {
+	if p, exists := DataSources[pluginID]; exists && p.CanHandleDataQueries() {
+		return p
+	}
+
+	// XXX: Might other plugins implement DataPlugin?
+
+	p := pm.BackendPluginManager.GetDataPlugin(pluginID)
+	if p != nil {
+		return p.(plugins.DataPlugin)
+	}
+
+	return nil
 }
