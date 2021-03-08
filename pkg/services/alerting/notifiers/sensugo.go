@@ -11,8 +11,6 @@ import (
 	"github.com/grafana/grafana/pkg/infra/log"
 	"github.com/grafana/grafana/pkg/models"
 	"github.com/grafana/grafana/pkg/services/alerting"
-	"github.com/grafana/grafana/pkg/services/alerting/errors"
-	"github.com/grafana/grafana/pkg/services/alerting/evalcontext"
 )
 
 func init() {
@@ -77,10 +75,10 @@ func NewSensuGoNotifier(model *models.AlertNotification) (alerting.Notifier, err
 	apikey := model.DecryptedValue("apikey", model.Settings.Get("apikey").MustString())
 
 	if url == "" {
-		return nil, errors.ValidationError{Reason: "Could not find URL property in settings"}
+		return nil, alerting.ValidationError{Reason: "Could not find URL property in settings"}
 	}
 	if apikey == "" {
-		return nil, errors.ValidationError{Reason: "Could not find the API Key property in settings"}
+		return nil, alerting.ValidationError{Reason: "Could not find the API Key property in settings"}
 	}
 
 	return &SensuGoNotifier{
@@ -109,7 +107,7 @@ type SensuGoNotifier struct {
 }
 
 // Notify send alert notification to Sensu Go
-func (sn *SensuGoNotifier) Notify(evalContext *evalcontext.EvalContext) error {
+func (sn *SensuGoNotifier) Notify(evalContext *alerting.EvalContext) error {
 	sn.log.Info("Sending Sensu Go result")
 
 	var namespace string

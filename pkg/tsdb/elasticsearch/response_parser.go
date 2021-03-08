@@ -71,7 +71,7 @@ func (rp *responseParser) getTimeSeries() (plugins.DataResponse, error) {
 			Columns: make([]plugins.DataTableColumn, 0),
 			Rows:    make([]plugins.DataRowValues, 0),
 		}
-		err := rp.processBuckets(res.Aggregations, target, queryRes.Series, &table, props, 0)
+		err := rp.processBuckets(res.Aggregations, target, &queryRes.Series, &table, props, 0)
 		if err != nil {
 			return plugins.DataResponse{}, err
 		}
@@ -107,7 +107,7 @@ func (rp *responseParser) processBuckets(aggs map[string]interface{}, target *Qu
 
 		if depth == maxDepth {
 			if aggDef.Type == dateHistType {
-				err = rp.processMetrics(esAgg, target, &series, props)
+				err = rp.processMetrics(esAgg, target, series, props)
 			} else {
 				err = rp.processAggregationDocs(esAgg, aggDef, target, table, props)
 			}

@@ -34,7 +34,6 @@ func init() {
 			datasources.Provision,
 			plugins.Provision,
 		),
-
 		InitPriority: registry.Low,
 	})
 }

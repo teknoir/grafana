@@ -1,4 +1,4 @@
-package evalcontext
+package alerting
 
 import (
 	"context"
@@ -9,8 +9,6 @@ import (
 	"github.com/grafana/grafana/pkg/bus"
 	"github.com/grafana/grafana/pkg/infra/log"
 	"github.com/grafana/grafana/pkg/models"
-	"github.com/grafana/grafana/pkg/services/alerting/alertingmodels"
-	"github.com/grafana/grafana/pkg/services/alerting/rule"
 	"github.com/grafana/grafana/pkg/setting"
 )
 
@@ -19,13 +17,13 @@ type EvalContext struct {
 	Firing         bool
 	IsTestRun      bool
 	IsDebug        bool
-	EvalMatches    []*alertingmodels.EvalMatch
-	Logs           []*alertingmodels.ResultLogEntry
+	EvalMatches    []*EvalMatch
+	Logs           []*ResultLogEntry
 	Error          error
 	ConditionEvals string
 	StartTime      time.Time
 	EndTime        time.Time
-	Rule           *rule.Rule
+	Rule           *Rule
 	log            log.Logger
 
 	dashboardRef *models.DashboardRef
@@ -41,13 +39,13 @@ type EvalContext struct {
 }
 
 // NewEvalContext is the EvalContext constructor.
-func NewEvalContext(alertCtx context.Context, rule *rule.Rule, requestValidator models.PluginRequestValidator) *EvalContext {
+func NewEvalContext(alertCtx context.Context, rule *Rule, requestValidator models.PluginRequestValidator) *EvalContext {
 	return &EvalContext{
 		Ctx:              alertCtx,
 		StartTime:        time.Now(),
 		Rule:             rule,
-		Logs:             make([]*alertingmodels.ResultLogEntry, 0),
-		EvalMatches:      make([]*alertingmodels.EvalMatch, 0),
+		Logs:             make([]*ResultLogEntry, 0),
+		EvalMatches:      make([]*EvalMatch, 0),
 		log:              log.New("alerting.evalContext"),
 		PrevAlertState:   rule.State,
 		RequestValidator: requestValidator,
@@ -89,7 +87,7 @@ func (c *EvalContext) GetStateModel() *StateDescription {
 	}
 }
 
-func (c *EvalContext) ShouldUpdateAlertState() bool {
+func (c *EvalContext) shouldUpdateAlertState() bool {
 	return c.Rule.State != c.PrevAlertState
 }
 
@@ -185,9 +183,9 @@ func getNewStateInternal(c *EvalContext) models.AlertStateType {
 	return models.AlertStateOK
 }
 
-// EvaluateNotificationTemplateFields will treat the alert evaluation rule's name and message fields as
+// evaluateNotificationTemplateFields will treat the alert evaluation rule's name and message fields as
 // templates, and evaluate the templates using data from the alert evaluation's tags
-func (c *EvalContext) EvaluateNotificationTemplateFields() error {
+func (c *EvalContext) evaluateNotificationTemplateFields() error {
 	if len(c.EvalMatches) < 1 {
 		return nil
 	}
@@ -225,7 +223,7 @@ func evaluateTemplate(s string, m map[string]string) (string, error) {
 }
 
 // buildTemplateDataMap builds a map of alert evaluation tag names to a set of associated values (comma separated)
-func buildTemplateDataMap(evalMatches []*alertingmodels.EvalMatch) (map[string]string, error) {
+func buildTemplateDataMap(evalMatches []*EvalMatch) (map[string]string, error) {
 	var result = map[string]string{}
 	for _, match := range evalMatches {
 		for tagName, tagValue := range match.Tags {

@@ -9,8 +9,6 @@ import (
 	"github.com/grafana/grafana/pkg/infra/log"
 	"github.com/grafana/grafana/pkg/models"
 	"github.com/grafana/grafana/pkg/services/alerting"
-	"github.com/grafana/grafana/pkg/services/alerting/errors"
-	"github.com/grafana/grafana/pkg/services/alerting/evalcontext"
 	"github.com/grafana/grafana/pkg/setting"
 )
 
@@ -37,7 +35,7 @@ func init() {
 func newGoogleChatNotifier(model *models.AlertNotification) (alerting.Notifier, error) {
 	url := model.Settings.Get("url").MustString()
 	if url == "" {
-		return nil, errors.ValidationError{Reason: "Could not find url property in settings"}
+		return nil, alerting.ValidationError{Reason: "Could not find url property in settings"}
 	}
 
 	return &GoogleChatNotifier{
@@ -120,7 +118,7 @@ type openLink struct {
 }
 
 // Notify send an alert notification to Google Chat.
-func (gcn *GoogleChatNotifier) Notify(evalContext *evalcontext.EvalContext) error {
+func (gcn *GoogleChatNotifier) Notify(evalContext *alerting.EvalContext) error {
 	gcn.log.Info("Executing Google Chat notification")
 
 	headers := map[string]string{

@@ -10,8 +10,6 @@ import (
 	"github.com/grafana/grafana/pkg/infra/log"
 	"github.com/grafana/grafana/pkg/models"
 	"github.com/grafana/grafana/pkg/services/alerting"
-	"github.com/grafana/grafana/pkg/services/alerting/errors"
-	"github.com/grafana/grafana/pkg/services/alerting/evalcontext"
 )
 
 func init() {
@@ -46,11 +44,11 @@ func init() {
 func NewKafkaNotifier(model *models.AlertNotification) (alerting.Notifier, error) {
 	endpoint := model.Settings.Get("kafkaRestProxy").MustString()
 	if endpoint == "" {
-		return nil, errors.ValidationError{Reason: "Could not find kafka rest proxy endpoint property in settings"}
+		return nil, alerting.ValidationError{Reason: "Could not find kafka rest proxy endpoint property in settings"}
 	}
 	topic := model.Settings.Get("kafkaTopic").MustString()
 	if topic == "" {
-		return nil, errors.ValidationError{Reason: "Could not find kafka topic property in settings"}
+		return nil, alerting.ValidationError{Reason: "Could not find kafka topic property in settings"}
 	}
 
 	return &KafkaNotifier{
@@ -71,7 +69,7 @@ type KafkaNotifier struct {
 }
 
 // Notify sends the alert notification.
-func (kn *KafkaNotifier) Notify(evalContext *evalcontext.EvalContext) error {
+func (kn *KafkaNotifier) Notify(evalContext *alerting.EvalContext) error {
 	state := evalContext.Rule.State
 
 	customData := triggMetrString

@@ -6,51 +6,49 @@ import (
 
 	"github.com/grafana/grafana/pkg/infra/log"
 	"github.com/grafana/grafana/pkg/models"
-	"github.com/grafana/grafana/pkg/services/alerting/job"
-	"github.com/grafana/grafana/pkg/services/alerting/rule"
 	"github.com/grafana/grafana/pkg/setting"
 )
 
 type schedulerImpl struct {
-	jobs map[int64]*job.Job
+	jobs map[int64]*Job
 	log  log.Logger
 }
 
 func newScheduler() scheduler {
 	return &schedulerImpl{
-		jobs: make(map[int64]*job.Job),
+		jobs: make(map[int64]*Job),
 		log:  log.New("alerting.scheduler"),
 	}
 }
 
-func (s *schedulerImpl) Update(rules []*rule.Rule) {
+func (s *schedulerImpl) Update(rules []*Rule) {
 	s.log.Debug("Scheduling update", "ruleCount", len(rules))
 
-	jobs := make(map[int64]*job.Job)
+	jobs := make(map[int64]*Job)
 
 	for i, rule := range rules {
-		var j *job.Job
+		var job *Job
 		if s.jobs[rule.ID] != nil {
-			j = s.jobs[rule.ID]
+			job = s.jobs[rule.ID]
 		} else {
-			j = &job.Job{}
-			j.SetRunning(false)
+			job = &Job{}
+			job.SetRunning(false)
 		}
 
-		j.Rule = rule
+		job.Rule = rule
 
 		offset := ((rule.Frequency * 1000) / int64(len(rules))) * int64(i)
-		j.Offset = int64(math.Floor(float64(offset) / 1000))
-		if j.Offset == 0 { // zero offset causes division with 0 panics.
-			j.Offset = 1
+		job.Offset = int64(math.Floor(float64(offset) / 1000))
+		if job.Offset == 0 { // zero offset causes division with 0 panics.
+			job.Offset = 1
 		}
-		jobs[rule.ID] = j
+		jobs[rule.ID] = job
 	}
 
 	s.jobs = jobs
 }
 
-func (s *schedulerImpl) Tick(tickTime time.Time, execQueue chan *job.Job) {
+func (s *schedulerImpl) Tick(tickTime time.Time, execQueue chan *Job) {
 	now := tickTime.Unix()
 
 	for _, job := range s.jobs {
@@ -80,7 +78,7 @@ func (s *schedulerImpl) Tick(tickTime time.Time, execQueue chan *job.Job) {
 	}
 }
 
-func (s *schedulerImpl) enqueue(job *job.Job, execQueue chan *job.Job) {
+func (s *schedulerImpl) enqueue(job *Job, execQueue chan *Job) {
 	s.log.Debug("Scheduler: Putting job on to exec queue", "name", job.Rule.Name, "id", job.Rule.ID)
 	execQueue <- job
 }

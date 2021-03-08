@@ -9,8 +9,6 @@ import (
 	"github.com/grafana/grafana/pkg/infra/log"
 	"github.com/grafana/grafana/pkg/models"
 	"github.com/grafana/grafana/pkg/services/alerting"
-	"github.com/grafana/grafana/pkg/services/alerting/errors"
-	"github.com/grafana/grafana/pkg/services/alerting/evalcontext"
 )
 
 var (
@@ -73,7 +71,7 @@ type ThreemaNotifier struct {
 // NewThreemaNotifier is the constructor for the Threema notifier
 func NewThreemaNotifier(model *models.AlertNotification) (alerting.Notifier, error) {
 	if model.Settings == nil {
-		return nil, errors.ValidationError{Reason: "No Settings Supplied"}
+		return nil, alerting.ValidationError{Reason: "No Settings Supplied"}
 	}
 
 	gatewayID := model.Settings.Get("gateway_id").MustString()
@@ -82,22 +80,22 @@ func NewThreemaNotifier(model *models.AlertNotification) (alerting.Notifier, err
 
 	// Validation
 	if gatewayID == "" {
-		return nil, errors.ValidationError{Reason: "Could not find Threema Gateway ID in settings"}
+		return nil, alerting.ValidationError{Reason: "Could not find Threema Gateway ID in settings"}
 	}
 	if !strings.HasPrefix(gatewayID, "*") {
-		return nil, errors.ValidationError{Reason: "Invalid Threema Gateway ID: Must start with a *"}
+		return nil, alerting.ValidationError{Reason: "Invalid Threema Gateway ID: Must start with a *"}
 	}
 	if len(gatewayID) != 8 {
-		return nil, errors.ValidationError{Reason: "Invalid Threema Gateway ID: Must be 8 characters long"}
+		return nil, alerting.ValidationError{Reason: "Invalid Threema Gateway ID: Must be 8 characters long"}
 	}
 	if recipientID == "" {
-		return nil, errors.ValidationError{Reason: "Could not find Threema Recipient ID in settings"}
+		return nil, alerting.ValidationError{Reason: "Could not find Threema Recipient ID in settings"}
 	}
 	if len(recipientID) != 8 {
-		return nil, errors.ValidationError{Reason: "Invalid Threema Recipient ID: Must be 8 characters long"}
+		return nil, alerting.ValidationError{Reason: "Invalid Threema Recipient ID: Must be 8 characters long"}
 	}
 	if apiSecret == "" {
-		return nil, errors.ValidationError{Reason: "Could not find Threema API secret in settings"}
+		return nil, alerting.ValidationError{Reason: "Could not find Threema API secret in settings"}
 	}
 
 	return &ThreemaNotifier{
@@ -110,7 +108,7 @@ func NewThreemaNotifier(model *models.AlertNotification) (alerting.Notifier, err
 }
 
 // Notify send an alert notification to Threema
-func (notifier *ThreemaNotifier) Notify(evalContext *evalcontext.EvalContext) error {
+func (notifier *ThreemaNotifier) Notify(evalContext *alerting.EvalContext) error {
 	notifier.log.Info("Sending alert notification from", "threema_id", notifier.GatewayID)
 	notifier.log.Info("Sending alert notification to", "threema_id", notifier.RecipientID)
 

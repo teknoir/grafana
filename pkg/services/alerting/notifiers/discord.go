@@ -14,8 +14,6 @@ import (
 	"github.com/grafana/grafana/pkg/infra/log"
 	"github.com/grafana/grafana/pkg/models"
 	"github.com/grafana/grafana/pkg/services/alerting"
-	"github.com/grafana/grafana/pkg/services/alerting/errors"
-	"github.com/grafana/grafana/pkg/services/alerting/evalcontext"
 	"github.com/grafana/grafana/pkg/setting"
 )
 
@@ -50,7 +48,7 @@ func newDiscordNotifier(model *models.AlertNotification) (alerting.Notifier, err
 	content := model.Settings.Get("content").MustString()
 	url := model.Settings.Get("url").MustString()
 	if url == "" {
-		return nil, errors.ValidationError{Reason: "Could not find webhook url property in settings"}
+		return nil, alerting.ValidationError{Reason: "Could not find webhook url property in settings"}
 	}
 
 	return &DiscordNotifier{
@@ -71,7 +69,7 @@ type DiscordNotifier struct {
 }
 
 // Notify send an alert notification to Discord.
-func (dn *DiscordNotifier) Notify(evalContext *evalcontext.EvalContext) error {
+func (dn *DiscordNotifier) Notify(evalContext *alerting.EvalContext) error {
 	dn.log.Info("Sending alert notification to", "webhook_url", dn.WebhookURL)
 
 	ruleURL, err := evalContext.GetRuleURL()

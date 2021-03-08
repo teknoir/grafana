@@ -11,13 +11,12 @@ import (
 	"github.com/grafana/grafana/pkg/infra/metrics"
 	"github.com/grafana/grafana/pkg/models"
 
-	"github.com/grafana/grafana/pkg/services/alerting/evalcontext"
 	"github.com/grafana/grafana/pkg/services/annotations"
 	"github.com/grafana/grafana/pkg/services/rendering"
 )
 
 type resultHandler interface {
-	handle(evalContext *evalcontext.EvalContext) error
+	handle(evalContext *EvalContext) error
 }
 
 type defaultResultHandler struct {
@@ -32,7 +31,7 @@ func newResultHandler(renderService rendering.Service) *defaultResultHandler {
 	}
 }
 
-func (handler *defaultResultHandler) handle(evalContext *evalcontext.EvalContext) error {
+func (handler *defaultResultHandler) handle(evalContext *EvalContext) error {
 	executionError := ""
 	annotationData := simplejson.New()
 
@@ -48,7 +47,7 @@ func (handler *defaultResultHandler) handle(evalContext *evalcontext.EvalContext
 	}
 
 	metrics.MAlertingResultState.WithLabelValues(string(evalContext.Rule.State)).Inc()
-	if evalContext.ShouldUpdateAlertState() {
+	if evalContext.shouldUpdateAlertState() {
 		handler.log.Info("New state change", "ruleId", evalContext.Rule.ID, "newState", evalContext.Rule.State, "prev state", evalContext.PrevAlertState)
 
 		cmd := &models.SetAlertStateCommand{
