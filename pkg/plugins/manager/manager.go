@@ -59,8 +59,8 @@ type PluginManager struct {
 	// AllowUnsignedPluginsCondition changes the policy for allowing unsigned plugins. Signature validation only runs when plugins are starting
 	// and running plugins will not be terminated if they violate the new policy.
 	AllowUnsignedPluginsCondition unsignedPluginConditionFunc
-	GrafanaLatestVersion          string
-	GrafanaHasUpdate              bool
+	grafanaLatestVersion          string
+	grafanaHasUpdate              bool
 	pluginScanningErrors          map[string]plugins.PluginError
 
 	renderer    *plugins.RendererPlugin
@@ -192,6 +192,14 @@ func (pm *PluginManager) GetDataSourcePlugin(id string) *plugins.DataSourcePlugi
 
 func (pm *PluginManager) GetPlugin(id string) *plugins.PluginBase {
 	return pm.plugins[id]
+}
+
+func (pm *PluginManager) GrafanaLatestVersion() string {
+	return pm.grafanaLatestVersion
+}
+
+func (pm *PluginManager) GrafanaHasUpdate() bool {
+	return pm.grafanaHasUpdate
 }
 
 // scanPluginPaths scans configured plugin paths.

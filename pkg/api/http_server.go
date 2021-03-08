@@ -13,6 +13,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/grafana/grafana/pkg/plugins"
 	"github.com/grafana/grafana/pkg/services/alerting"
 	"github.com/grafana/grafana/pkg/services/live"
 	"github.com/grafana/grafana/pkg/services/search"
@@ -79,7 +80,7 @@ type HTTPServer struct {
 	License                models.Licensing                   `inject:""`
 	BackendPluginManager   backendplugin.Manager              `inject:""`
 	PluginRequestValidator models.PluginRequestValidator      `inject:""`
-	PluginManager          *manager.PluginManager             `inject:""`
+	PluginManager          plugins.Manager                    `inject:""`
 	SearchService          *search.SearchService              `inject:""`
 	ShortURLService        *shorturls.ShortURLService         `inject:""`
 	Live                   *live.GrafanaLive                  `inject:""`
@@ -90,14 +91,11 @@ type HTTPServer struct {
 	PluginDashboardService *plugindashboards.Service          `inject:""`
 	AlertEngine            *alerting.AlertEngine              `inject:""`
 	Listener               net.Listener
-	dashboardService       dashboards.DashboardService
 }
 
 func (hs *HTTPServer) Init() error {
 	hs.log = log.New("http.server")
 
-	// TODO: Make this a DI service
-	hs.dashboardService = dashboards.NewService(hs.TSDBService)
 	hs.macaron = hs.newMacaron()
 	hs.registerRoutes()
 

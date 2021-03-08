@@ -12,6 +12,7 @@ import (
 	sourcemap "github.com/go-sourcemap/sourcemap"
 
 	"github.com/getsentry/sentry-go"
+	"github.com/grafana/grafana/pkg/plugins"
 	"github.com/grafana/grafana/pkg/plugins/manager"
 	"github.com/grafana/grafana/pkg/setting"
 )
@@ -46,11 +47,11 @@ type SourceMapStore struct {
 	sync.Mutex
 	cache         map[string]*sourceMap
 	cfg           *setting.Cfg
-	pm            *manager.PluginManager
+	pm            plugins.Manager
 	readSourceMap ReadSourceMapFn
 }
 
-func NewSourceMapStore(cfg *setting.Cfg, pm *manager.PluginManager, readSourceMap ReadSourceMapFn) *SourceMapStore {
+func NewSourceMapStore(cfg *setting.Cfg, pm plugins.Manager, readSourceMap ReadSourceMapFn) *SourceMapStore {
 	return &SourceMapStore{
 		cache:         make(map[string]*sourceMap),
 		cfg:           cfg,

@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/grafana/grafana/pkg/services/validations"
-	"github.com/grafana/grafana/pkg/tsdb/tsdbifaces"
 
 	. "github.com/smartystreets/goconvey/convey"
 )
@@ -17,7 +16,7 @@ type conditionStub struct {
 	noData   bool
 }
 
-func (c *conditionStub) Eval(context *EvalContext, reqHandler tsdbifaces.RequestHandler) (*ConditionResult, error) {
+func (c *conditionStub) Eval(context *EvalContext, reqHandler plugins.DataRequestHandler) (*ConditionResult, error) {
 	return &ConditionResult{Firing: c.firing, EvalMatches: c.matches, Operator: c.operator, NoDataFound: c.noData}, nil
 }
 
