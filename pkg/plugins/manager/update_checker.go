@@ -28,7 +28,7 @@ type gitHubLatest struct {
 
 func (pm *PluginManager) getAllExternalPluginSlugs() string {
 	var result []string
-	for _, plug := range pm.Plugins {
+	for _, plug := range pm.plugins {
 		if plug.IsCorePlugin {
 			continue
 		}
@@ -71,7 +71,7 @@ func (pm *PluginManager) checkForUpdates() {
 		return
 	}
 
-	for _, plug := range pm.Plugins {
+	for _, plug := range pm.plugins {
 		for _, gplug := range gNetPlugins {
 			if gplug.Slug == plug.Id {
 				plug.GrafanaNetVersion = gplug.Version

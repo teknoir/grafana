@@ -26,6 +26,7 @@ func init() {
 }
 
 type Service struct {
+	PluginManager plugins.Manager `inject:""`
 }
 
 func (s *Service) Init() error {
@@ -36,7 +37,7 @@ func (s *Service) Init() error {
 type AzureMonitorExecutor struct {
 	httpClient    *http.Client
 	dsInfo        *models.DataSource
-	pluginManager *manager.PluginManager
+	pluginManager plugins.Manager
 }
 
 // NewAzureMonitorExecutor initializes a http client

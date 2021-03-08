@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/grafana/grafana/pkg/components/gtime"
+	"github.com/grafana/grafana/pkg/services/alerting"
 	"github.com/grafana/grafana/pkg/setting"
 	"github.com/grafana/grafana/pkg/tsdb/tsdbifaces"
 
@@ -115,7 +116,7 @@ func (dr *dashboardServiceImpl) buildSaveDashboardCommand(dto *SaveDashboardDTO,
 	}
 
 	if validateAlerts {
-		extractor := dashboards.NewDashAlertExtractor(dash, dash.OrgId, dto.User, dr.requestHandler)
+		extractor := alerting.NewDashAlertExtractor(dash, dash.OrgId, dto.User)
 		if err := extractor.ValidateAlerts(); err != nil {
 			return nil, err
 		}
@@ -206,7 +207,7 @@ func validateDashboardRefreshInterval(dash *models.Dashboard) error {
 }
 
 func (dr *dashboardServiceImpl) updateAlerting(orgID int64, dashboard *models.Dashboard, user *models.SignedInUser) error {
-	extractor := dashboards.NewDashAlertExtractor(dashboard, orgID, user, dr.requestHandler)
+	extractor := alerting.NewDashAlertExtractor(dashboard, orgID, user)
 	alerts, err := extractor.GetAlerts()
 	if err != nil {
 		return err
