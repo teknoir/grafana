@@ -1,8 +1,7 @@
 package load
 
 import (
-	"io"
-
+	"cuelang.org/go/cue"
 	"cuelang.org/go/cue/load"
 	"github.com/grafana/grafana/pkg/schema"
 )
@@ -20,23 +19,29 @@ import (
 type BaseLoadPaths struct {
 	// BaseCueFS should be rooted at a directory containing the filesystem layout
 	// expected to exist at github.com/grafana/grafana/cue.
-	BaseCueFS io.FS
+	BaseCueFS string
 
 	// DistPluginCueFS should point to some fs path (TBD) under which all core
 	// plugins live.
-	DistPluginCueFS io.FS
+	DistPluginCueFS string
 
 	// InstanceCueFS should point to a root dir in which non-core plugins live.
 	// Normal case will be that this only happens when an actual Grafana
 	// instance is making the call, and has a plugin dir to offer - though
 	// external tools could always create their own dirs shaped like a Grafana
 	// plugin dir, and point to those.
-	InstanceCueFS io.FS
+	InstanceCueFS string
 }
 
-// LoadBaseDashboard creates a schema.Family that correponds to all known
+// BuildFamily read from cue file and build schema.Family go object
+func BuildFamily(famval cue.Value) (*schema.Family, error) {
+	fam := &schema.Family{}
+	return fam, nil
+}
+
+// BaseDashboard creates a schema.Family that correponds to all known
 // core-only dashboard schemata in this version of Grafana.
-func LoadBaseDashboard(p BaseLoadPaths) (*schema.Family, error) {
+func BaseDashboard(p BaseLoadPaths) (*schema.Family, error) {
 	// TODO deal with making sure we're using the same cue.Runtime everywhere
 
 	// TODO see if we can trick load.Instances into using our io.FS. If not, we'll
@@ -44,14 +49,21 @@ func LoadBaseDashboard(p BaseLoadPaths) (*schema.Family, error) {
 	// be the default `cue` behavior for loading packages in ancestor dirs, all files
 	// of the same package in a dir, etc. We could minimize the cost by keeping our
 	// on-disk filesystem structures simple.
-	l := load.Instances([]string{p.BaseCueFS + "/cue/data"}, &load.Config{Package: "grafanaschema"})
-
+	SchemaInstances := load.Instances([]string{p.BaseCueFS + "/cue/data"}, &load.Config{Package: "grafanaschema"})
 	// Select the dashboard schema Value from the instance path at which we have
 	// defined it to live.
 	// TODO ugh, we need to fully define the schema family pattern to pull out the current dashboard
-	famval := l.Lookup("dashboardFamily")
 	fam := &schema.Family{}
-
+	var err error
+	insts := cue.Build(SchemaInstances)
+	for _, l := range insts {
+		famval := l.Lookup("dashboardFamily")
+		if famval.Exists() == true {
+			fam, err = BuildFamily(famval)
+			return fam, err
+		}
+	}
+	return fam, nil
 	// TODO Iterate over seqs in famval, create corresponding CueSchema on fam
 }
 
