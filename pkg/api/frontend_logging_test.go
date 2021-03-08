@@ -71,7 +71,7 @@ func logSentryEventScenario(t *testing.T, desc string, event frontendlogging.Fro
 			return nil, os.ErrNotExist
 		}
 
-		sourceMapStore := frontendlogging.NewSourceMapStore(cfg, readSourceMap)
+		sourceMapStore := frontendlogging.NewSourceMapStore(cfg, nil, readSourceMap)
 
 		loggingHandler := NewFrontendLogMessageHandler(sourceMapStore)
 

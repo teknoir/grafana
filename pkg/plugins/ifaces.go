@@ -39,6 +39,8 @@ type Manager interface {
 	ImportDashboard(pluginID, path string, orgID, folderID int64, dashboardModel *simplejson.Json,
 		overwrite bool, inputs []ImportDashboardInput, user *models.SignedInUser,
 		requestHandler DataRequestHandler) (PluginDashboardInfoDTO, error)
+	// ScanningErrors returns plugin scanning errors encountered.
+	ScanningErrors() []PluginError
 }
 
 type ImportDashboardInput struct {

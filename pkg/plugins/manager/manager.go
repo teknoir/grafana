@@ -186,8 +186,30 @@ func (pm *PluginManager) Renderer() *plugins.RendererPlugin {
 	return pm.renderer
 }
 
-func (pm *PluginManager) GetDataSourcePlugin(id string) *plugins.DataSourcePlugin {
+func (pm *PluginManager) GetDataSource(id string) *plugins.DataSourcePlugin {
 	return pm.dataSources[id]
+}
+
+func (pm *PluginManager) DataSources() []*plugins.DataSourcePlugin {
+	var rslt []*plugins.DataSourcePlugin
+	for _, ds := range pm.dataSources {
+		rslt = append(rslt, ds)
+	}
+
+	return rslt
+}
+
+func (pm *PluginManager) NumDataSources() int {
+	return len(pm.dataSources)
+}
+
+func (pm *PluginManager) Plugins() []*plugins.PluginBase {
+	var rslt []*plugins.PluginBase
+	for _, p := range pm.plugins {
+		rslt = append(rslt, p)
+	}
+
+	return rslt
 }
 
 func (pm *PluginManager) GetPlugin(id string) *plugins.PluginBase {

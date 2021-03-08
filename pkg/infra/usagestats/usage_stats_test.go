@@ -251,7 +251,7 @@ func TestMetrics(t *testing.T) {
 				assert.Equal(t, getSystemStatsQuery.Result.Playlists, metrics.Get("stats.playlist.count").MustInt64())
 				assert.Equal(t, len(manager.Apps), metrics.Get("stats.plugins.apps.count").MustInt())
 				assert.Equal(t, len(manager.Panels), metrics.Get("stats.plugins.panels.count").MustInt())
-				assert.Equal(t, len(manager.DataSources), metrics.Get("stats.plugins.datasources.count").MustInt())
+				assert.Equal(t, uss.PluginManager.NumDataSources(), metrics.Get("stats.plugins.datasources.count").MustInt())
 				assert.Equal(t, getSystemStatsQuery.Result.Alerts, metrics.Get("stats.alerts.count").MustInt64())
 				assert.Equal(t, getSystemStatsQuery.Result.ActiveUsers, metrics.Get("stats.active_users.count").MustInt64())
 				assert.Equal(t, getSystemStatsQuery.Result.Datasources, metrics.Get("stats.datasources.count").MustInt64())
