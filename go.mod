@@ -11,16 +11,15 @@ replace github.com/denisenkom/go-mssqldb => github.com/denisenkom/go-mssqldb v0.
 replace k8s.io/client-go => k8s.io/client-go v0.18.8
 
 require (
-	cloud.google.com/go/storage v1.13.0
+	cloud.google.com/go/storage v1.14.0
 	github.com/BurntSushi/toml v0.3.1
 	github.com/VividCortex/mysqlerr v0.0.0-20170204212430-6c6b55f8796f
-	github.com/aws/aws-sdk-go v1.37.20
+	github.com/aws/aws-sdk-go v1.37.25
 	github.com/beevik/etree v1.1.0
 	github.com/benbjohnson/clock v0.0.0-20161215174838-7dc76406b6d3
-	github.com/blang/semver v3.5.1+incompatible // indirect
 	github.com/bradfitz/gomemcache v0.0.0-20190913173617-a41fca850d0b
-	github.com/centrifugal/centrifuge v0.13.0
-	github.com/cortexproject/cortex v1.1.0
+	github.com/centrifugal/centrifuge v0.15.0
+	github.com/cortexproject/cortex v1.4.1-0.20201022071705-85942c5703cf
 	github.com/crewjam/saml v0.4.6-0.20201227203850-bca570abb2ce
 	github.com/davecgh/go-spew v1.1.1
 	github.com/denisenkom/go-mssqldb v0.0.0-20200910202707-1e08a3fab204
@@ -39,35 +38,32 @@ require (
 	github.com/go-sql-driver/mysql v1.5.0
 	github.com/go-stack/stack v1.8.0
 	github.com/gobwas/glob v0.2.3
-	github.com/gocql/gocql v0.0.0-20200526081602-cd04bd7f22a7 // indirect
 	github.com/golang/mock v1.5.0
 	github.com/golang/protobuf v1.4.3
-	github.com/google/go-cmp v0.5.4
+	github.com/google/go-cmp v0.5.5
 	github.com/google/uuid v1.2.0
 	github.com/gosimple/slug v1.9.0
 	github.com/grafana/grafana-aws-sdk v0.1.0
 	github.com/grafana/grafana-plugin-model v0.0.0-20190930120109-1fc953a61fb4
 	github.com/grafana/grafana-plugin-sdk-go v0.88.0
-	github.com/grafana/loki v1.0.2
+	github.com/grafana/loki v1.6.1
 	github.com/grpc-ecosystem/go-grpc-middleware v1.2.2
-	github.com/grpc-ecosystem/go-grpc-prometheus v1.2.1-0.20191002090509-6af20e3a5340 // indirect
 	github.com/hashicorp/go-hclog v0.15.0
 	github.com/hashicorp/go-plugin v1.4.0
 	github.com/hashicorp/go-version v1.2.1
 	github.com/inconshreveable/log15 v0.0.0-20180818164646-67afb5ed74ec
-	github.com/influxdata/influxdb-client-go/v2 v2.2.0
+	github.com/influxdata/influxdb-client-go/v2 v2.2.2
+	github.com/jaegertracing/jaeger v1.22.0
 	github.com/jmespath/go-jmespath v0.4.0
 	github.com/jonboulle/clockwork v0.2.2 // indirect
 	github.com/json-iterator/go v1.1.10
 	github.com/jung-kurt/gofpdf v1.16.2
-	github.com/lib/pq v1.9.0
+	github.com/lib/pq v1.10.0
 	github.com/linkedin/goavro/v2 v2.10.0
 	github.com/magefile/mage v1.11.0
 	github.com/mattn/go-isatty v0.0.12
 	github.com/mattn/go-runewidth v0.0.9 // indirect
 	github.com/mattn/go-sqlite3 v1.14.6
-	github.com/onsi/ginkgo v1.14.1 // indirect
-	github.com/onsi/gomega v1.10.2 // indirect
 	github.com/opentracing/opentracing-go v1.2.0
 	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/pkg/errors v0.9.1
@@ -75,14 +71,12 @@ require (
 	github.com/prometheus/client_golang v1.9.0
 	github.com/prometheus/client_model v0.2.0
 	github.com/prometheus/common v0.18.0
-	github.com/prometheus/prometheus v1.8.2-0.20201014093524-73e2ce1bd643 // indirect
 	github.com/robfig/cron v0.0.0-20180505203441-b41be1df6967
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/russellhaering/goxmldsig v1.1.0
 	github.com/smartystreets/goconvey v1.6.4
 	github.com/stretchr/testify v1.7.0
 	github.com/teris-io/shortid v0.0.0-20171029131806-771a37caa5cf
-	github.com/thanos-io/thanos v0.13.0 // indirect
 	github.com/timberio/go-datemath v0.1.1-0.20200323150745-74ddef604fff
 	github.com/ua-parser/uap-go v0.0.0-20190826212731-daf92ba38329
 	github.com/uber/jaeger-client-go v2.25.0+incompatible
@@ -91,16 +85,15 @@ require (
 	github.com/weaveworks/common v0.0.0-20201119133501-0619918236ec
 	github.com/xorcare/pointer v1.1.0
 	github.com/yudai/gojsondiff v1.0.0
-	go.etcd.io/bbolt v1.3.5-0.20200615073812-232d8fc87f50 // indirect
-	golang.org/x/crypto v0.0.0-20201208171446-5f87f3452ae9
-	golang.org/x/exp v0.0.0-20200821190819-94841d0725da // indirect
-	golang.org/x/net v0.0.0-20201224014010-6772e930b67b
-	golang.org/x/oauth2 v0.0.0-20210113205817-d3ed898aa8a3
+	go.opentelemetry.io/collector v0.21.0
+	golang.org/x/crypto v0.0.0-20201221181555-eec23a3978ad
+	golang.org/x/net v0.0.0-20210119194325-5f4716e94777
+	golang.org/x/oauth2 v0.0.0-20210218202405-ba52d332ba99
 	golang.org/x/sync v0.0.0-20201207232520-09787c993a3a
 	golang.org/x/time v0.0.0-20200630173020-3af7569d3a1e
 	gonum.org/v1/gonum v0.8.2
-	google.golang.org/api v0.39.0
-	google.golang.org/grpc v1.35.0
+	google.golang.org/api v0.40.0
+	google.golang.org/grpc v1.36.0
 	gopkg.in/alexcesaro/quotedprintable.v3 v3.0.0-20150716171945-2caba252f4dc // indirect
 	gopkg.in/asn1-ber.v1 v1.0.0-20181015200546-f715ec2f112d // indirect
 	gopkg.in/ini.v1 v1.62.0
