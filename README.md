@@ -1,3 +1,13 @@
+# Teknoir Grafana
+This project is a fork of grafana, so it easily can be updated from upstream.
+It is just minor tweaks to the darktheme to match the Teknoir platform.
+
+## Build
+```bash
+gcloud builds submit . --config=cloudbuild.yaml --timeout=3600 --substitutions=SHORT_SHA="shams"
+```
+
+
 ![Grafana](docs/logo-horizontal.png)
 
 The open-source platform for monitoring and observability.
