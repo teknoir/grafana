@@ -1,3 +1,5 @@
+timeout: '18000s'
+
 steps:
   - name: 'gcr.io/cloud-builders/docker'
     env:
