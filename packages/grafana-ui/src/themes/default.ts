@@ -10,16 +10,16 @@ export const commonColorsPalette = {
   gray70: '#9fa7b3',
   gray60: '#7b8087',
   gray33: '#464c54',
-  gray25: '#2c3235',
-  gray15: '#202226',
-  gray10: '#141619',
-  gray05: '#0b0c0e',
+  gray25: '#2c2c30', //'#2c3235',
+  gray15: '#26272c', //'#202226',
+  gray10: '#1e2023', //'#141619',
+  gray05: '#1e2023', //'#0b0c0e',
 
   // New blues palette used by next-gen form elements
-  blue95: '#5794f2', // blue95
-  blue85: '#33a2e5', // blueText
-  blue80: '#3274d9', // blue80
-  blue77: '#1f60c4', // blue77
+  blue95: '#fff', //'#5794f2', // blue95
+  blue85: '#fff', //'#33a2e5', // blueText
+  blue80: '#f05a28', //'#3274d9', // blue80
+  blue77: '#fbca0a', //'#1f60c4', // blue77
 
   // New reds palette used by next-gen form elements
   red88: '#e02f44',

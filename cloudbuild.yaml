@@ -1,0 +1,19 @@
+timeout: '18000s'
+
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    env:
+      - "DOCKER_CLI_EXPERIMENTAL=enabled"
+    args:
+      - 'build'
+      - '-t'
+      - 'gcr.io/${PROJECT_ID}/grafana:${SHORT_SHA}'
+      - '.'
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'tag'
+      - 'gcr.io/${PROJECT_ID}/grafana:${SHORT_SHA}'
+      - 'gcr.io/${PROJECT_ID}/grafana:latest'
+
+images: ['gcr.io/${PROJECT_ID}/grafana:${SHORT_SHA}',
+         'gcr.io/${PROJECT_ID}/grafana:latest']
